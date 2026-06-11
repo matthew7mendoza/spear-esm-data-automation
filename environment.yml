@@ -4,6 +4,7 @@ channels:
 dependencies:
   - python=3.11
   - xarray
+  - matplotlib
   - netcdf4
   - jupyter
   - python-dotenv
