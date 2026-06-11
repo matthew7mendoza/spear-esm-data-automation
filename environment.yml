@@ -8,6 +8,9 @@ dependencies:
   - netcdf4
   - jupyter
   - python-dotenv
+  - pydantic
+  - pypdf
+  - python-docx
   - pip
   - pip:
       - google-genai
