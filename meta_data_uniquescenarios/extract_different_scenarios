@@ -1,0 +1,61 @@
+import xarray as xr
+import s3fs
+from fpdf import FPDF
+
+fs = s3fs.S3FileSystem(anon=True)
+
+# We will pull different variables across the two different scenarios
+scenarios = {
+    'historical': [
+        ('pr', '192101010300-193012312100'),  # Precipitation
+        ('tas', '192101-201412')              # Temperature (Monthly)
+    ],
+    'scenarioSSP5-85': [
+        ('pr', '201501010300-202412312100'),  # Future Precipitation
+        ('tas', '201501-210012')              # Future Temperature (Monthly)
+    ]
+}
+
+test_case_number = 1
+
+for scenario, variables in scenarios.items():
+    for var, time_str in variables:
+        # We'll just grab ensemble member 1 to keep it simple
+        ensemble = "r1i1p1f1"
+        
+        # Monthly data (Amon) and 6-hourly data (6hr) are stored in slightly different paths
+        freq = "Amon" if var == "tas" else "6hr"
+        
+        print(f"Extracting Test Case {test_case_number}: {scenario} - {var}...")
+        
+        # Construct the S3 path
+        s3_path = f's3://noaa-gfdl-spear-large-ensembles-pds/SPEAR/GFDL-LARGE-ENSEMBLES/CMIP/NOAA-GFDL/GFDL-SPEAR-MED/{scenario}/{ensemble}/{freq}/{var}/gr3/v20210201/{var}_{freq}_GFDL-SPEAR-MED_{scenario}_{ensemble}_gr3_{time_str}.nc'
+        
+        try:
+            with fs.open(s3_path) as file_obj:
+                ds = xr.open_dataset(file_obj, engine='h5netcdf', decode_times=False, decode_cf=False)
+                
+                metadata_text = f"--- SCENARIO: {scenario} | VARIABLE: {var} ---\n\n"
+                metadata_text += "--- GLOBAL METADATA ---\n"
+                for key, value in ds.attrs.items():
+                    metadata_text += f"{key}: {value}\n"
+                    
+                metadata_text += f"\n--- VARIABLE METADATA ({var}) ---\n"
+                for key, value in ds[var].attrs.items():
+                    metadata_text += f"{key}: {value}\n"
+                    
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Arial", size=10)
+                pdf.multi_cell(0, 5, metadata_text)
+                
+                pdf_filename = f"stress_test_{test_case_number}_{scenario}_{var}.pdf"
+                pdf.output(pdf_filename)
+                print(f"Saved: {pdf_filename}")
+                
+        except Exception as e:
+            print(f"Failed on {scenario} {var}. Error: {e}")
+            
+        test_case_number += 1
+
+print("Stress test batch generated!")
