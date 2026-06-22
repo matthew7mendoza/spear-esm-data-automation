@@ -1,13 +1,21 @@
-import xarray as xr
+"""This script gets spear climate dataset from the laboratory and save details"""
 
-public_gfdl_url = "https://pavics.ouranos.ca/twitcher/ows/proxy/thredds/dodsC/datasets/simulations/bias_adjusted/cmip6/ouranos/ESPO-G/ESPO-G6-E5Lv1.0.0/day_ESPO-G6-E5L_v1.0.0_CMIP6_ScenarioMIP_NAM_CSIRO_ACCESS-ESM1-5_ssp370_r1i1p1f1_1950-2100.ncml"
+import xarray as xr
+import fsspec
+
+DATA_URL = "ftp://nomads.gfdl.noaa.gov/2/GFDL-LARGE-ENSEMBLES/CMIP/NOAA-GFDL/GFDL-SPEAR-MED/historical/r10i1p1f1/Amon/tas/gr3/v20210201/tas_Amon_GFDL-SPEAR-MED_historical_r10i1p1f1_gr3_192101-201412.nc"
 
 try:
-    ds = xr.open_dataset(public_gfdl_url, chunks=None, engine="netcdf4")
+    with fsspec.open(DATA_URL, "rb") as f:
+        ds = xr.open_dataset(f, engine="h5netcdf")
+        
+        print("Success")
+        
+        output_filename = "spear_metadata_summary.txt"
+        with open(output_filename, "w", encoding="utf-8") as text_file:
+            text_file.write(str(ds))
+            
+        print(f"Saved to {output_filename}")
 
-    with open("real_gfdl_headers.txt", "w") as file:
-        file.write(str(ds))
-
-    print(" GFDL metadata successfully written to file")
 except Exception as e:
-    print(f"The connection failed for some reason: {e}")
+    print(f"Error: {str(e).replace('.', '')}")

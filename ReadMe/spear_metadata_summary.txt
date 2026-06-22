@@ -1,0 +1,26 @@
+<xarray.Dataset> Size: 936MB
+Dimensions:    (lat: 360, bnds: 2, lon: 576, time: 1128)
+Coordinates:
+  * lat        (lat) float64 3kB -89.75 -89.25 -88.75 ... 88.75 89.25 89.75
+  * bnds       (bnds) float64 16B 1.0 2.0
+  * lon        (lon) float64 5kB 0.3125 0.9375 1.562 2.188 ... 358.4 359.1 359.7
+  * time       (time) object 9kB 1921-01-16 12:00:00 ... 2014-12-16 12:00:00
+Data variables:
+    lat_bnds   (lat, bnds) float64 6kB ...
+    lon_bnds   (lon, bnds) float64 9kB ...
+    tas        (time, lat, lon) float32 936MB ...
+    time_bnds  (time, bnds) object 18kB ...
+Attributes: (12/28)
+    history:                File was processed by fremetar (GFDL analog of CM...
+    table_id:               Amon
+    contact:                gfdl.climate.model.info@noaa.gov
+    experiment:             all-forcing simulation for 1921 to 2014
+    experiment_id:          historical
+    Conventions:            CF-1.7
+    ...                     ...
+    references:             SPEAR: The next generation GFDL modeling system f...
+    title:                  NOAA GFDL GFDL-SPEAR-MED, all-forcing simulation ...
+    gfdl_experiment_name:   SPEAR-MED.historical.r10
+    license:                CC-BY-SA-4.0
+    forcing:                CMIP6 historical
+    external_variables:     areacella
