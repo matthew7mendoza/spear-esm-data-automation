@@ -1,0 +1,102 @@
+URL: s3://noaa-gfdl-spear-large-ensembles-pds/SPEAR/GFDL-LARGE-ENSEMBLES/CMIP/NOAA-GFDL/GFDL-SPEAR-MED/scenarioSSP5-85/r12i1p1f1/6hr/pr/gr3/v20210201/pr_6hr_GFDL-SPEAR-MED_scenarioSSP5-85_r12i1p1f1_gr3_208101010300-209012312100.nc
+
+--- GLOBAL ATTRIBUTES ---
+Conventions: CF-1.7 CMIP-6.2
+activity_id: SPEAR
+branch_method: Initialized from same member number of GFDL-SPEAR-MED historical experiment with SSP5-8.5 forcings
+branch_time_in_child: 0.0
+branch_time_in_parent: 32872.5
+contact: gfdl.climate.model.info@noaa.gov
+creation_date: 2025-11-26T17:44:15Z
+experiment: all-forcing simulation for 2011 to 2101
+experiment_id: scenarioSSP5-85
+external_variables: areacella
+forcing_index: 1
+frequency: 6hr
+grid: gr3
+grid_label: gr3
+history: 2025-11-26T17:44:15Z ;rewrote data to be consistent with SPEAR for variable pr found in table 6hr.;
+File was processed by fremetar (GFDL analog of CMOR). TripleID: [exper_id_JeWLYJP7qF,realiz_id_pbMpRPSf2U,run_id_lvywyeBtwv]
+initialization_index: 1
+institution: National Oceanic and Atmospheric Administration, Geophysical Fluid Dynamics Laboratory, Princeton, NJ 08540, USA
+institution_id: NOAA-GFDL
+mip_era: CMIP6
+model_id: GFDL-SPEAR-MED
+nominal_resolution: 100 km
+parent_activity_id: SPEAR
+parent_mip_era: CMIP6
+parent_source_id: GFDL-SPEAR-MED
+parent_time_units: days since 1921-01-01 00:00:00
+parent_variant_label: r12i1p1f1
+physics_index: 1
+product: model-output
+project_id: GFDL-LARGE-ENSEMBLES
+realization_index: 12
+realm: atmos
+references: SPEAR: The next generation GFDL modeling system for seasonal to multidecadal prediction and projection. Journal of Advances in Modeling Earth Systems, 12, e2019MS001895. https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019MS001895. The GFDL Data Portal (http://nomads.gfdl.noaa.gov/) provides access to NOAA/GFDL's publicly available model input and output data sets.
+run_variant: 12th realization
+source: GFDL-SPEAR (2020, https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019MS001895): aerosol: interactive; atmos: GFDL-AM4C192 (Cubed-sphere (c192) - 0.5 degree nominal horizontal resolution; 33 levels; top level 1 hPa); atmosChem: fast chemistry, aerosol only; land: GFDL-LM4.0.1 (Cubed-sphere (c192) - 0.5 degree nominal horizontal resolution; 20 levels; bot level 10m); land:Veg:GFDL-LM4.0.1 (dynamic vegetation, dynamic land use); land:Hydro:GFDL-LM4.0.1 (soil water and ice, multi-layer snow, rivers and lakes); landIce:GFDL-LM4.0.1; ocean: GFDL-MOM6, tripolar; 360 x 320 longitude/latitude; 75 levels; top grid cell 0-2 m; seaIce: GFDL-SIS2.0,tripolar ; 360 x 320 longitude/latitude; 5 layers; 5 thickness categories
+source_id: GFDL-SPEAR-MED
+source_type: AOGCM
+sub_experiment: none
+sub_experiment_id: none
+table_id: 6hr
+table_info: Creation Date:(18 November 2020) MD5:07214ae0a02a220926028854c7b059de
+tracking_id: hdl:21.14100/51bf0701-fa05-431b-86b0-59ef00b4e4f8
+variable_id: pr
+variant_label: r12i1p1f1
+cmor_version: 3.13.0
+parent_experiment_id: historical
+title: GFDL-SPEAR-MED output prepared for FLP
+license: CC0-1.0
+gfdl_experiment_name: SPEAR-MED.scenarioSSP5-85.r12
+
+--- DATA VARIABLES AND METADATA ---
+
+Variable: time_bnds
+Dimensions: ('time', 'bnds')
+DataType: object
+
+Variable: lat_bnds
+Dimensions: ('lat', 'bnds')
+DataType: float64
+
+Variable: lon_bnds
+Dimensions: ('lon', 'bnds')
+DataType: float64
+
+Variable: pr
+Dimensions: ('time', 'lat', 'lon')
+DataType: float32
+  standard_name: precipitation_flux
+  long_name: Precipitation
+  comment: includes both liquid and solid phases
+  units: kg m-2 s-1
+  cell_methods: area: time: mean
+  cell_measures: area: areacella
+
+Variable: time
+Dimensions: ('time',)
+DataType: object
+  bounds: time_bnds
+  axis: T
+  long_name: time
+  standard_name: time
+
+Variable: lat
+Dimensions: ('lat',)
+DataType: float64
+  bounds: lat_bnds
+  units: degrees_north
+  axis: Y
+  long_name: Latitude
+  standard_name: latitude
+
+Variable: lon
+Dimensions: ('lon',)
+DataType: float64
+  bounds: lon_bnds
+  units: degrees_east
+  axis: X
+  long_name: Longitude
+  standard_name: longitude

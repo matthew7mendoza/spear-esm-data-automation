@@ -1,0 +1,100 @@
+URL: s3://noaa-gfdl-spear-large-ensembles-pds/SPEAR/GFDL-LARGE-ENSEMBLES/CMIP/NOAA-GFDL/GFDL-SPEAR-MED/scenarioSSP5-85/r1i1p1f1/day/tas/gr3/v20210201/tas_day_GFDL-SPEAR-MED_scenarioSSP5-85_r1i1p1f1_gr3_20810101-20901231.nc
+
+--- GLOBAL ATTRIBUTES ---
+history: File was processed by fremetar (GFDL analog of CMOR). TripleID: [exper_id_1RY5Gd7KwY,realiz_id_WdKbnBO23C,run_id_To0eKiIChW]
+table_id: day
+contact: gfdl.climate.model.info@noaa.gov
+experiment: all-forcing simulation for 2015 to 2100
+experiment_id: scenarioSSP5-85
+Conventions: CF-1.7
+branch_method: Initialized from same member number of GFDL-SPEAR-MED historical experiment with SSP5-8.5 forcings
+forcing: CMIP6 SSP5-85
+frequency: day
+initialization_method: 1
+institute_id: NOAA GFDL
+institution: NOAA GFDL(201 Forrestal Rd, Princeton, NJ, 08540)
+realization: 1
+modeling_realm: atmos
+model_id: GFDL-SPEAR-MED
+parent_experiment_id: Historical
+parent_experiment_rip: r1i1p1f1
+physics_version: 1
+product: GFDL SPEAR_MED model output
+project_id: GFDL-LARGE-ENSEMBLES
+source: GFDL-SPEAR (2020, https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019MS001895):
+aerosol: interactive
+atmos: GFDL-AM4C192 (Cubed-sphere (c192) - 0.5 degree nominal horizontal resolution; 33 levels; top level 1 hPa)
+atmosChem: fast chemistry, aerosol only
+land: GFDL-LM4.0.1 (Cubed-sphere (c192) - 0.5 degree nominal horizontal resolution; 20 levels; bot level 10m);
+land:Veg:GFDL-LM4.0.1 (dynamic vegetation, dynamic land use);
+land:Hydro:GFDL-LM4.0.1 (soil water and ice, multi-layer snow, rivers and lakes)
+landIce:GFDL-LM4.0.1
+ocean: GFDL-MOM6, tripolar ; 360 x 320 longitude/latitude; 75 levels; top grid cell 0-2 m
+seaIce: GFDL-SIS2.0,tripolar ; 360 x 320 longitude/latitude; 5 layers; 5 thickness categories
+creation_date: 2021-02-07T04:00:52Z
+tracking_id: a23b0581-62f7-4371-90c9-9d44ce3a2d61
+references: SPEAR: The next generation GFDL modeling system for seasonal to multidecadal prediction and projection. Journal of Advances in Modeling Earth Systems, 12, e2019MS001895. https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019MS001895. The GFDL Data Portal (http://nomads.gfdl.noaa.gov/) provides access to NOAA/GFDL's publicly available model input and output data sets.
+title: NOAA GFDL GFDL-SPEAR-MED, all-forcing simulation for 2015 to 2100 (run 1) experiment output for GFDL-LARGE-ENSEMBLES
+gfdl_experiment_name: SPEAR-MED.ScenarioSSP5-85.r1
+license: CC-BY-SA-4.0
+external_variables: areacella
+
+--- DATA VARIABLES AND METADATA ---
+
+Variable: lat_bnds
+Dimensions: ('lat', 'bnds')
+DataType: float64
+
+Variable: lon_bnds
+Dimensions: ('lon', 'bnds')
+DataType: float64
+
+Variable: tas
+Dimensions: ('time', 'lat', 'lon')
+DataType: float32
+  long_name: Near-Surface Air Temperature
+  units: K
+  valid_range: [100. 400.]
+  cell_methods: time: mean
+  interp_method: conserve_order2
+  standard_name: air_temperature
+  cell_measures: area: areacella
+
+Variable: time_bnds
+Dimensions: ('time', 'bnds')
+DataType: object
+  long_name: time axis boundaries
+
+Variable: bnds
+Dimensions: ('bnds',)
+DataType: float64
+  long_name: vertex number
+  cartesian_axis: N
+
+Variable: lat
+Dimensions: ('lat',)
+DataType: float64
+  long_name: latitude
+  units: degrees_north
+  axis: Y
+  bounds: lat_bnds
+  standard_name: latitude
+
+Variable: lon
+Dimensions: ('lon',)
+DataType: float64
+  long_name: longitude
+  units: degrees_east
+  axis: X
+  bounds: lon_bnds
+  standard_name: longitude
+
+Variable: time
+Dimensions: ('time',)
+DataType: object
+  long_name: time
+  cartesian_axis: T
+  calendar_type: julian
+  bounds: time_bnds
+  standard_name: time
+  axis: T

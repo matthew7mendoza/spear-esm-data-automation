@@ -1,0 +1,100 @@
+URL: s3://noaa-gfdl-spear-large-ensembles-pds/SPEAR/GFDL-LARGE-ENSEMBLES/CMIP/NOAA-GFDL/GFDL-SPEAR-MED/historical/r23i1p1f1/day/uas/gr3/v20210201/uas_day_GFDL-SPEAR-MED_historical_r23i1p1f1_gr3_20110101-20141231.nc
+
+--- GLOBAL ATTRIBUTES ---
+history: File was processed by fremetar (GFDL analog of CMOR). TripleID: [exper_id_JVUqFcjVxE,realiz_id_h1A5XqNnBs,run_id_ye8sp2CSiw]
+table_id: day
+contact: gfdl.climate.model.info@noaa.gov
+experiment: all-forcing simulation for 1921 to 2014
+experiment_id: historical
+Conventions: CF-1.7
+branch_method: Initial conditions for this ensemble member were created using the 1921-1-1 land restart from a historical (1851-1-1 to 1920-12-31) and the 0541-1-1 restarts for the atmosphere, ocean and ice components from a Control experiment using fixed 1850 forcings
+frequency: day
+initialization_method: 1
+institute_id: NOAA GFDL
+institution: NOAA GFDL(201 Forrestal Rd, Princeton, NJ, 08540)
+realization: 23
+modeling_realm: atmos
+model_id: GFDL-SPEAR-MED
+parent_experiment_id: none
+parent_experiment_rip: r23i1p1f1
+physics_version: 1
+product: GFDL SPEAR_MED model output
+project_id: GFDL-LARGE-ENSEMBLES
+source: GFDL-SPEAR (2020, https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019MS001895):
+aerosol: interactive;
+atmos: GFDL-AM4C192 (Cubed-sphere (c192) - 0.5 degree nominal horizontal resolution; 33 levels; top level 1 hPa);
+atmosChem: fast chemistry, aerosol only;
+land: GFDL-LM4.0.1 (Cubed-sphere (c192) - 0.5 degree nominal horizontal resolution; 20 levels; bot level 10m);
+land:Veg:GFDL-LM4.0.1 (dynamic vegetation, dynamic land use);
+land:Hydro:GFDL-LM4.0.1 (soil water and ice, multi-layer snow, rivers and lakes);
+landIce:GFDL-LM4.0.1;
+ocean: GFDL-MOM6, tripolar; 360 x 320 longitude/latitude; 75 levels; top grid cell 0-2 m;
+seaIce: GFDL-SIS2.0,tripolar ; 360 x 320 longitude/latitude; 5 layers; 5 thickness categories
+creation_date: 2021-02-23T03:21:31Z
+tracking_id: 24bf1d34-5945-4bd5-b8dc-929e3cbd420b
+references: SPEAR: The next generation GFDL modeling system for seasonal to multidecadal prediction and projection. Journal of Advances in Modeling Earth Systems, 12, e2019MS001895. https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019MS001895. The GFDL Data Portal (http://nomads.gfdl.noaa.gov/) provides access to NOAA/GFDL's publicly available model input and output data sets.
+title: NOAA GFDL GFDL-SPEAR-MED, all-forcing simulation for 1921 to 2014 (run 23) experiment output for GFDL-LARGE-ENSEMBLES
+gfdl_experiment_name: SPEAR-MED.historical.r23
+license: CC-BY-SA-4.0
+forcing: CMIP6 historical
+external_variables: areacella
+
+--- DATA VARIABLES AND METADATA ---
+
+Variable: lat_bnds
+Dimensions: ('lat', 'bnds')
+DataType: float64
+
+Variable: lon_bnds
+Dimensions: ('lon', 'bnds')
+DataType: float64
+
+Variable: time_bnds
+Dimensions: ('time', 'bnds')
+DataType: object
+  long_name: time axis boundaries
+
+Variable: uas
+Dimensions: ('time', 'lat', 'lon')
+DataType: float32
+  long_name: Eastward Near-Surface Wind
+  units: m s-1
+  valid_range: [-400.  400.]
+  cell_methods: time: mean
+  interp_method: conserve_order2
+  standard_name: eastward_wind
+  cell_measures: area: areacella
+
+Variable: bnds
+Dimensions: ('bnds',)
+DataType: float64
+  long_name: vertex number
+  cartesian_axis: N
+
+Variable: lat
+Dimensions: ('lat',)
+DataType: float64
+  long_name: latitude
+  units: degrees_north
+  axis: Y
+  bounds: lat_bnds
+  standard_name: latitude
+
+Variable: lon
+Dimensions: ('lon',)
+DataType: float64
+  long_name: longitude
+  units: degrees_east
+  axis: X
+  bounds: lon_bnds
+  standard_name: longitude
+
+Variable: time
+Dimensions: ('time',)
+DataType: object
+  long_name: time
+  cartesian_axis: T
+  calendar_type: julian
+  bounds: time_bnds
+  standard_name: time
+  axis: T
