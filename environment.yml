@@ -1,4 +1,4 @@
-name: spear-env
+name: esm_llm_env
 channels:
   - conda-forge
 dependencies:
@@ -9,7 +9,12 @@ dependencies:
   - jupyter
   - python-dotenv
   - pydantic
+  - pyyaml
+  - fastapi           
+  - uvicorn           
+  - python-multipart  
   - pip
   - pip:
+      - streamlit>=1.35.0
       - google-genai
       - "markitdown[all]"

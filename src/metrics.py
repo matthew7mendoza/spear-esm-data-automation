@@ -1,5 +1,5 @@
 """
-Statistic metrics for evaluating LLM judge stability.
+Pure statistical formula utilities measuring agreement distributions and inter-rater reliability metrics.
 """
 
 import re
@@ -7,24 +7,15 @@ from collections import Counter
 from typing import Literal
 
 def calculate_percentage_agreement(verdicts: list[str]) -> float:
-
-    """
-    Computes the raw proportion of matching binary classifications. (Yes / No)
-    """
-
+    """Computes the raw percentage proportion of matching binary classifications."""
     if not verdicts:
         return 0.0
-    
     counter = Counter(verdicts)
     most_common_count = counter.most_common(1)[0][1]
-    return (most_common_count / len(verdicts) * 100.0)
+    return (most_common_count / len(verdicts)) * 100.0
 
 def calculate_gwets_ac1(verdicts: list[str]) -> float:
-
-    """
-    Calculates Gwet's AC1
-    """
-
+    """Calculates Gwet's AC1 configuration index adjusted for extreme trait rarity distributions."""
     total_runs = len(verdicts)
     if total_runs <= 1:
         return 1.0
@@ -32,10 +23,7 @@ def calculate_gwets_ac1(verdicts: list[str]) -> float:
     counts = Counter(verdicts)
     n_yes, n_no = counts.get("Yes", 0), counts.get("No", 0)
 
-    # Observed consistent agreement in LLM's responses
     p_a = (n_yes * (n_yes - 1) + n_no * (n_no - 1)) / (total_runs * (total_runs - 1))
-
-    # Classification chance agreements
     p_yes, p_no = n_yes / total_runs, n_no / total_runs
     p_e = 2 * p_yes * p_no if (p_yes * p_no) > 0 else 1.0
 
@@ -45,11 +33,7 @@ def calculate_gwets_ac1(verdicts: list[str]) -> float:
     return (p_a - p_e) / (1.0 - p_e)
 
 def calculate_fleiss_kappa(verdict_matrix: list[list[str]]) -> float:
-
-    """
-    Computes Fleiss' Kappa across multiple runs of LLM's responses (Yes / No) for consistency"
-    """
-
+    """Computes Fleiss' Kappa configuration parameter indicating overall structural agreement indices."""
     num_items = len(verdict_matrix)
     if num_items == 0:
         return 0.0
@@ -71,14 +55,11 @@ def calculate_fleiss_kappa(verdict_matrix: list[list[str]]) -> float:
     
     return (p_mean - p_e) / (1.0 - p_e)
 
-
 def calculate_reasoning_stability(
-        justifications: list[str],
-        strategy: Literal["Numeric", "Quote", "Assertion"]) -> float:
-    
-    """
-    Isolates rationals and returns consistency percentages
-    """
+    justifications: list[str],
+    strategy: Literal["Numeric", "Quote", "Assertion"]
+) -> float:
+    """Isolates logical trace patterns checking token cluster distribution variation properties."""
     total_runs = len(justifications)
     if total_runs == 0:
         return 0.0

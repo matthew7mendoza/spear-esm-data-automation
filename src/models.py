@@ -1,9 +1,50 @@
 """
-Data validation schemas and structural models for document automation
+Every file in this repo relies on these schema definitions
+Data validation and error contracts
 """
 
-from typing import Literal
+from typing import Literal 
 from pydantic import BaseModel, Field
+
+
+# =================
+# Error Boundaries
+# =================
+
+class SpearAutomationError(Exception):
+    """
+    Base exception for all errors within SPEAR automation project.
+    """
+    pass
+
+
+class DocumentExtractionError(SpearAutomationError):
+    """
+    Base exception for all document extraction failures.
+    """
+    pass
+
+class CorruptedDocumentError(DocumentExtractionError):
+    """
+    Raised when the file exists but MarkItDown fails to read data
+    """
+    pass
+
+class AgentConfigurationError(SpearAutomationError):
+    """
+    Raised when the agent lacks required credentials or configuration.
+    """
+    pass
+
+class AgentExecutionError(SpearAutomationError):
+    """
+    Raised when the LLM fails to generate or return valid data.
+    """
+    pass
+
+# =================
+# Pydantic Schemas
+# =================
 
 class NoveltyEntrySchema(BaseModel):
 
@@ -13,7 +54,7 @@ class NoveltyEntrySchema(BaseModel):
     """
 
     relevance: Literal[0, 1] = Field(
-        ..., description="If 0, all other sub-scores must be 0."
+        ..., description="Hierarchical gate. If 0, all other sub-scores must be 0."
     )
     originality: int = Field(..., ge=0, le=3, description="Score 0-3.")
     gap_addressing: int = Field(..., ge=0, le=3, description="Score 0-3.")
@@ -21,10 +62,9 @@ class NoveltyEntrySchema(BaseModel):
 
 class ComplianceScoringSchema(BaseModel):
 
-    """"
+    """
     Audit metric tracking for the LLM
     """
-
     question: str = Field(..., description="The rubric compliance verification question.")
     justification: str = Field(..., description="Natural language justification trace.")
     answer: Literal["Yes", "No"] = Field(..., description="Strict binary compliance verdict.")

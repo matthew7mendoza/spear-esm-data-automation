@@ -1,77 +1,146 @@
-import os
+"""
+Prompts, parameters, AI lifecycle processing
+Reads from template.json at startupt
+Uses AI to answer questions
+"""
+
 import logging
 from pathlib import Path
+from typing import Any
+import yaml
+from google import genai
+from google.genai import types
+from pydantic import ValidationError
 
-from src.document_reader import extract_text, EXTRACTOR_MAP
-from src.ai_agent import LLM_Agent
-from src.exceptions import DocumentExtractionError, AgentExecutionError
+from src.models import(
+    FormResponses,
+    AgentExecutionError,
+    AgentConfigurationError,
+    DocumentExtractionError,
+    CorruptedDocumentError    
+)
+
+from src.document import extract_text, EXTRACTOR_MAP
 
 logger = logging.getLogger(__name__)
 
-def generate_document_draft(
-    target_document_type: str,
-    input_dir: Path | str,
-    api_key: str
-) -> None:
+class DocumentGenerator:
     """
-    Handles reading of input files and calls AI agent to generate a draft.
+    AI model read documents and puts specific answers into the questions
     """
 
-    input_path = Path(input_dir)
-
-    agent = LLM_Agent(api_key=api_key, temperature=0.0)
-    print("\nAI AGENT ACTIVATED")
-
-    if not input_path.exists():
-        input_path.mkdir(parents=True)
-        print(f"Created '{input_path.resolve()}'. Please drop your files in the folder and re-run.")
-        return
-    
-    supporting_documents = [
-        file for file in input_path.iterdir()
-        if file.is_file() and file.suffix.lower() in EXTRACTOR_MAP
-    ]
-
-    if not supporting_documents:
-        print(f"No supporting files found in '{input_path.resolve()}'")
-        return
-    
-    print(f"Configuration loaded. Found {len(supporting_documents)} supported file(s):")
-    for document in supporting_documents:
-        print(f" -> {document.name}")
-
-    print(f"\n--- Assembling knowledge base for {target_document_type} ---")
-    combined_document_text = ""
-
-    for path in supporting_documents:
-        try:
-            print(f"Reading: {path.name}...")
-            extracted = extract_text(path)
-            combined_document_text += f"\n\n--- SOURCE: {path.name} ---\n{extracted}"
-        except FileNotFoundError:
-            print(f"Could not locate file at {path}")
-        except DocumentExtractionError as read_err:
-            print(f"Failed to extract text: {read_err}")
-
-    if not combined_document_text.strip():
-        print("\nNo text could be extracted from the provided files.")
-        return
-    
-    print(f"\n ---Processing {target_document_type} extraction via LLM--- ")
-    try:
-        result = agent.process_document(target_document_type, combined_document_text)
-        print("Extraction complete.\n")
-
-        print(f"---- GENERATED {target_document_type} DRAFT ----\n")
-        for question, answer in result.get("extracted_answers", {}).items():
-            print(f"{question}\n> {answer}\n")
+    def __init__(
+        self,
+        client: genai.Client,
+        model_name: str = "gemini-3.1-pro-preview",
+        temperature: float = 0.0
+    ):
         
-        missing_info = result.get("missing_information", [])
-        if missing_info:
-            print("----- MISSING INFORMATION -----")
-            print("The AI could not find answers to these questions in your documents:\n")
-            for missing in missing_info:
-                print(f"- {missing}")
+        if not client:
+            raise ValueError("An active AI client must be provided.")
+        self.client = client
+        self.model_name = model_name
+        self.temperature = temperature
+
+        self.instructions, self.templates = self._load_configuration_blueprints()
+
+    def _load_configuration_blueprints(self) -> tuple[str, dict[str, Any]]:
+        """
+        Loads the system prompts and document questions from local templates.yaml
+        """
+        config_path = Path(__file__).parent / "templates.yaml"
+        if not config_path.exists():
+            raise AgentConfigurationError(f"The templates.yaml file is missing at: {config_path.resolve()}")
+        
+        try:
+            with open(config_path, "r", encoding="utf-8") as file:
+                data = yaml.safe_load(file)
+            return data["DEFAULT_LLM_INSTRUCTIONS"], data["DOCUMENT_TEMPLATES"]
+        except Exception as yaml_error:
+            raise AgentConfigurationError("Unable to read / parse templates.yaml file. Check that format is correct.") from yaml_error
+        
+    def execute_extraction(self, target_questions: list[str], content_payload: str) -> dict[str, Any]:
+        """
+        Sends the document text and list of questions to AI,
+        forcing AI to return strict JSON response
+        """
+
+        formatted_questions = "\n".join(f"- {question}" for question in target_questions)
+        user_prompt = f"QUESTIONS TO ANSWER:\n{formatted_questions}\n\nSOURCE DOCUMENT:\n{content_payload}"
+
+        config = types.GenerateContentConfig(
+            system_instruction=self.instructions,
+            temperature=self.temperature,
+            response_mime_type="application/json",
+            response_schema=FormResponses
+        )
+
+        try:
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=user_prompt,
+                config=config
+            )
+        except Exception as api_error:
+            logger.error("Failed to communicate with AI API model.", exc_info=True)
+            raise AgentExecutionError("Could not get a response from the AI model API") from api_error
+        
+        try:
+
+            if not response.text:
+                raise AgentExecutionError("The AI completed the request but returned an empty response.")
+            validated_data: FormResponses = response.parsed
+
+        except ValidationError as validation_error:
+            logger.error("The AI's response failed data validation rules.")
+            raise AgentExecutionError("The data returned from the AI contains invalid or unreadable data formats.") from validation_error
+        
+        flat_answers = {item.question: item.answer for item in validated_data.extracted_answers}
+
+        return {
+            "extracted_answers": flat_answers,
+            "missing_information": validated_data.missing_information
+        }
     
-    except AgentExecutionError as agent_err:
-        print(f"\nThe AI Agent encountered an error: {agent_err}")
+    def generate_draft_from_directory(self, target_document_type: str, input_dir: Path | str) -> dict[str, Any]:
+        """
+        Finds all supported files in a folder, extracts their text, combines them together, sends to the AI
+        """
+
+        doc_type_upper = target_document_type.upper()
+        active_template = self.templates.get(doc_type_upper)
+
+        if not active_template:
+            raise ValueError(f"The document type '{target_document_type}' was not found in templates.json")
+        
+        input_path = Path(input_dir)
+        if not input_path.exists():
+            input_path.mkdir(parents=True, exist_ok=True)
+            logger.info(f"The requested folder was missing, so a new empty folder was created: {input_path.resolve()}")
+            return {}
+        
+        valid_workspace_files = [
+            file for file in input_path.iterdir()
+            if file.is_file() and file.suffix.lower() in EXTRACTOR_MAP
+        ]
+
+        aggregated_text_blocks = []
+        for file_path in valid_workspace_files:
+            try:
+                text_block = extract_text(file_path)
+                aggregated_text_blocks.append(f"--- SOURCE CONTENT ASSET: {file_path.name} ---\n{text_block}")
+            except (DocumentExtractionError, CorruptedDocumentError) as read_failure:
+                logger.error(f"Skipping file {file_path.name} because it could not be read: {read_failure}")
+
+        if not aggregated_text_blocks:
+            raise AgentExecutionError("Finished checking the folder, no text could be successfully read from any of the files")
+
+        final_unified_context = "\n\n".join(aggregated_text_blocks)
+
+        return self.execute_extraction(
+            target_questions=active_template["questions"],
+            content_payload=final_unified_context
+        )
+
+
+
