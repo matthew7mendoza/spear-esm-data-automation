@@ -3,7 +3,7 @@ FastAPI backend
 uvicorn api:app --reload --port 8000
 """
 
-import tempfile
+from seed import seed_data_from_yaml
 import asyncio 
 from pathlib import Path
 from typing import Any
@@ -13,95 +13,275 @@ from fastapi import (
     File,
     Form,
     HTTPException,
-    Query
+    Query,
+    BackgroundTasks,
+    status,
+    Depends
 )
-from pydantic import BaseModel
-import yaml
-import json
 
-from src.providers import get_provider
-from src.generator import DocumentGenerator
-from src.judge import LLMJudge
-from src.document import extract_text, EXTRACTOR_MAP
+from contextlib import asynccontextmanager
+import shutil
+import uuid
+from fastapi.responses import JSONResponse
+import json
+from concurrent.futures import ProcessPoolExecutor
+
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+from src.config.database import async_session_creator, init_db_tables, get_db_session
+from src.config.db_models import FormTemplate, TemplateQuestion, Task
+
+from src.config.providers import get_provider
+from src.core.generator import DocumentGenerator
+from src.core.judge import LLMJudge
+from src.parsing.document import extract_text, EXTRACTOR_MAP
+from src.config.models import AuditRequest, TaskStatusResponse, TemplateCreateRequest
+
+RUN_DIR = Path("data/runtime_staging")
+
+cpu_process_pool = ProcessPoolExecutor(max_workers=2)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Manages action when sever boots up and handles when server boots down
+    """
+
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    await init_db_tables()
+
+    async with async_session_creator() as session:
+        result = await session.exec(select(FormTemplate))
+        if not result.all():
+            print("Database is empty... seeding default layouts")
+            await seed_data_from_yaml()
+
+    yield
+
+    cpu_process_pool.shutdown(wait=True)
+    #add server cleanup commands here later
+
+
 
 app = FastAPI(
     title="ESM Data Automation API",
-    description="backend"
+    description="backend",
+    lifespan=lifespan
 )
 
-class AuditRequest(BaseModel):
+def _extract_context_cpu_worker(staging_path_str: str) -> str:
     """
-    Pydantic schema handle input validation for JSON endpoints
-    """
-
-    source_context: str
-    answers: dict[str, Any]
-    iterations: int = 3
-
-@app.get("/api/templates")
-def get_templates():
-    """
-    Gets available template keys from templates.yaml
+    worker function running inside seperate OS process
+    byplasses global interpreter lock to completely parse massive files
     """
 
-    template_path = Path("src/templates.yaml")
-    if not template_path.exists():
-        # Will fix this hardcode later
-        return ["DMP", "README"]
+    worker_path = Path(staging_path_str)
+
+    valid_workspace_files = [
+        file for file in worker_path.iterdir()
+        if file.is_file() and file.suffix.lower() in EXTRACTOR_MAP
+    ]
+
+    if not valid_workspace_files:
+        raise ValueError("No text could be scanned!")
+    
+    return "\n\n".join(
+        f"--- SOURCE CONTENT ASSET: {file_path.name} ---\n{extract_text(file_path)}"
+        for file_path in valid_workspace_files
+    )
+
+
+async def run_heavy_processing(
+    task_id: str,
+    target_doc: str,
+    model_provider: str,
+    staging_path: Path
+) -> None:
+    """
+    Handles the long document reading and AI tasks
+    """
+
+    async with async_session_creator() as session:
+        task = await session.get(Task, task_id)
+        if task:
+            task.status = "PROCESSING"
+            await session.commit()
         
-    with open(template_path, "r", encoding="utf-8") as file:
-        data = yaml.safe_load(file)
-        return list(data.get("DOCUMENT_TEMPLATES", {}).keys())
-        
-@app.post("/api/generate")
-async def generate_document(
-    target_doc: str = Form(...),
-    model_provider: str = Form("gemini"),
-    files: list[UploadFile] = File(...)
-):
-    """
-    Accepts file streams, puts in temporary directory,
-    triggers the LLM generator
-    """
-
+        statement = (
+            select(TemplateQuestion)
+            .join(FormTemplate)
+            .where(FormTemplate.name == target_doc.upper())
+            .order_by(TemplateQuestion.sort_order)
+        )
+        result = await session.exec(statement)
+        target_questions = [question.text for question in result.all()]
+    
     try:
+        if not target_questions:
+            raise ValueError(f"No operational fields found for data blueprint: '{target_doc}'")
+        
+        loop = asyncio.get_running_loop()
+        final_unified_context = await loop.run_in_executor(
+            cpu_process_pool,
+            _extract_context_cpu_worker,
+            str(staging_path)
+        )
+
         provider_instance = get_provider(name=model_provider)
         generator = DocumentGenerator(provider=provider_instance)
-    except Exception as error:
-        raise HTTPException(status_code=400, detail=f"LLM Provider Initialization Failure: {error}")
+
+        report = await asyncio.to_thread(
+            generator.execute_extraction,
+            target_questions,
+            final_unified_context
+        )
+
+        async with async_session_creator() as session:
+            task = await session.get(Task, task_id)
+            if task:
+                task.status = "COMPLETED"
+                task.report_json = json.dumps(report)
+                task.source_context = final_unified_context
+                await session.commit()
     
-    with tempfile.TemporaryDirectory() as temp_directory:
-        temp_path = Path(temp_directory)
-
-        for uploaded_file in files:
-            file_disk_path = temp_path / Path(uploaded_file.filename).name
-            content = await uploaded_file.read()
-            file_disk_path.write_bytes(content)
+    except Exception as error:
+        async with async_session_creator() as session:
+            task = await session.get(Task, task_id)
+            if task:
+                task.status = "FAILED"
+                task.detail = str(error)
+                await session.commit()
+    
+    finally:
+        if staging_path.exists():
+            await asyncio.to_thread(shutil.rmtree, staging_path)
         
-        try:
-            report = await asyncio.to_thread(
-                generator.generate_draft_from_directory, 
-                target_doc,
-                temp_path
-            )
 
-            def parse_source_files():
-                return [
-                    f"--- SOURCE CONTEXT ASSET: {file_path.name} ---\n{extract_text(file_path)}"
-                    for file_path in temp_path.iterdir()
-                    if file_path.suffix.lower() in EXTRACTOR_MAP
-                ]
-            
-            source_blocks = await asyncio.to_thread(parse_source_files)
-            combined_text = "\n\n".join(source_blocks)
+@app.get("/api/templates")
+async def get_templates(session: AsyncSession = Depends(get_db_session)) -> list[str]:
+    """
+    Gets available template keys from database registry
+    """
 
-            return {
-                "report": report,
-                "source_context": combined_text
-            }
-        except Exception as error:
-            raise HTTPException(status_code=500, detail=f"Generation processing error: {str(error)}")
+    result = await session.exec(select(FormTemplate))
+    return [template.name for template in result.all()]
+        
+@app.post("/api/generate", status_code=status.HTTP_202_ACCEPTED)
+async def generate_document(
+    background_tasks: BackgroundTasks,
+    target_doc: str = Form(...),
+    model_provider: str = Form("gemini"),
+    files: list[UploadFile] = File(...),
+    session: AsyncSession = Depends(get_db_session)
+) -> JSONResponse:
+    """
+    Saves input files to disk,
+    logs new job in db w/ side-thread,
+    fire up background processing
+    return tracking JSON reciept
+    """
 
+    task_id = str(uuid.uuid4())
+    task_staging_path = RUN_DIR / task_id
+    task_staging_path.mkdir(parents=True, exist_ok=True)
+
+    try:
+        for uploaded_file in files:
+            if not uploaded_file.filename:
+                continue
+            file_disk_path = task_staging_path / Path(uploaded_file.filename).name
+            content = await uploaded_file.read()
+            await asyncio.to_thread(file_disk_path.write_bytes, content)
+        
+        new_task = Task(task_id=task_id, status="PENDING")
+        session.add(new_task)
+        await session.commit()
+
+        background_tasks.add_task(
+            run_heavy_processing,
+            task_id,
+            target_doc.upper(),
+            model_provider,
+            task_staging_path
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"task_id": task_id, "status": "PENDING"}
+        )
+
+    except Exception as error:
+        if task_staging_path.exists():
+            shutil.rmtree(task_staging_path)
+        raise HTTPException(status_code=500, detail=f"Failed to securely stage file: {error}")
+    
+
+@app.get("/api/tasks/{task_id}", response_model=TaskStatusResponse)
+async def get_task_status(task_id: str, session: AsyncSession = Depends(get_db_session)) -> dict[str, Any]:
+    """
+    Look up a specific tracking code inside db, 
+    checks if AI is still writing, finished, or crashed
+    """
+
+    task = await session.get(Task, task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="The request job token does not exist.")
+    
+    return {
+        "task_id": task.task_id,
+        "status": task.status,
+        "report": json.loads(task.report_json) if task.report_json else None,
+        "source_context": task.source_context,
+        "detail": task.detail
+    }
+
+@app.post("/api/templates", status_code=status.HTTP_201_CREATED)
+async def create_custom_template(
+    payload: TemplateCreateRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Saves a brand new form template into the database
+    making it instantly available
+    """
+
+    template_name_upper = payload.name.upper()
+
+    existing = await session.exec(
+        select(FormTemplate).where(FormTemplate.name == template_name_upper)
+    )
+    if existing.one_or_none():
+        raise HTTPException(status_code=400, detail=f"Template '{template_name_upper}' already exists!")
+    
+    db_questions = [
+        TemplateQuestion(text=question_text, sort_order=index)
+        for index, question_text in enumerate(payload.questions)
+    ]
+
+    new_template = FormTemplate(
+        name=template_name_upper,
+        description=payload.description,
+        questions=db_questions
+    )
+
+    session.add(new_template)
+    await session.commit()
+    return {
+        "status": "SUCCESS",
+        "message": f"Template '{template_name_upper}' successfully registered!"
+    }
+
+@app.get("/api/tasks", response_model=list[TaskStatusResponse])
+async def list_all_tasks(session: AsyncSession = Depends(get_db_session)):
+    """
+    Gets every tracking ticket stored in db,
+    allows scientists to look at their history of generated template records
+    """
+
+    result = await session.exec(select(Task).order_by(Task.task_id))
+    return result.all()
 
 @app.post("/api/audit")
 async def run_audit(payload: AuditRequest, model_provider: str = Query("gemini")):

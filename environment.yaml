@@ -10,9 +10,13 @@ dependencies:
   - fastapi           
   - uvicorn           
   - python-multipart  
+  - ffmpeg
   - pip
   - pip:
       - streamlit>=1.35.0
       - google-genai
       - openai
       - "markitdown[all]"
+      - sqlmodel
+      - aiosqlite
+      - asyncpg

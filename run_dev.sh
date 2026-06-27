@@ -2,14 +2,18 @@
 
 trap "kill 0" EXIT
 
-echo "Activating environment, starting uvicorn backend"
+if lsof -t -i:8000 >/dev/null 2>&1; then
+    echo "Clearing port 8000..."
+    kill -9 $(lsof -t -i:8000) >/dev/null 2>&1
+    sleep 1
+fi
 
+echo "Starting backend..."
 uvicorn api:app --reload --port 8000 &
 
-sleep 4
+sleep 3
 
-echo "starting streamlit frontend"
-
+echo "Starting frontend..."
 streamlit run app.py
 
 wait
