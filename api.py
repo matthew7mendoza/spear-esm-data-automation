@@ -25,6 +25,7 @@ import uuid
 from fastapi.responses import JSONResponse
 import json
 from concurrent.futures import ProcessPoolExecutor
+from pyprojroot import here
 
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -37,7 +38,7 @@ from src.core.judge import LLMJudge
 from src.parsing.document import extract_text, EXTRACTOR_MAP
 from src.config.models import AuditRequest, TaskStatusResponse, TemplateCreateRequest
 
-RUN_DIR = Path("data/runtime_staging")
+RUN_DIR = here() / "data" / "runtime_staging"
 
 cpu_process_pool = ProcessPoolExecutor(max_workers=2)
 
@@ -48,7 +49,7 @@ async def lifespan(app: FastAPI):
     Manages action when sever boots up and handles when server boots down
     """
 
-    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    RUN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     await init_db_tables()
 
     async with async_session_creator() as session:

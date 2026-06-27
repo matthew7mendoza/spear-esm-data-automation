@@ -3,12 +3,16 @@ Database configuration & session management
 """
 
 import os
+from pyprojroot import here
 from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./spear_automation.db")
+PROJECT_ROOT = here()
+DEFAULT_DB_PATH = PROJECT_ROOT / "spear_automation.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite+aiosqlite:///{DEFAULT_DB_PATH}")
+
 
 async_engine = create_async_engine(DATABASE_URL, echo=False, future=True)
 async_session_creator = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)

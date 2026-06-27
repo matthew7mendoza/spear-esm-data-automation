@@ -5,6 +5,7 @@ Load initial form data from YAML file into the database
 import asyncio
 import logging
 import yaml
+from pyprojroot import here
 from pathlib import Path
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -53,7 +54,7 @@ async def seed_data_from_yaml() -> None:
     logger.info("Starting database tables...")
     await init_db_tables()
 
-    yaml_path = Path("src/config/templates.yaml")
+    yaml_path = here() / "src" / "config" / "templates.yaml"
     if not yaml_path.exists():
         logger.error(f"Could not find the file at: {yaml_path.resolve()}")
         return
