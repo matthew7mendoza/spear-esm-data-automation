@@ -3,6 +3,7 @@ FastAPI backend
 uvicorn api:app --reload --port 8000
 """
 
+import logging
 from backend.seed import seed_data_from_yaml
 import asyncio 
 from pathlib import Path
@@ -41,7 +42,7 @@ from backend.esm_data.models import AuditRequest, TaskStatusResponse, TemplateCr
 PROJECT_ROOT = Path(str(files("backend"))).parent
 RUN_DIR = PROJECT_ROOT / "data" / "runtime_staging"
 
-
+logger = logging.getLogger(__name__)
 cpu_process_pool = ProcessPoolExecutor(max_workers=2)
 
 
@@ -51,13 +52,14 @@ async def lifespan(app: FastAPI):
     Manages action when sever boots up and handles when server boots down
     """
 
+    PROJECT_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
     RUN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     await init_db_tables()
 
     async with async_session_creator() as session:
         result = await session.exec(select(FormTemplate))
         if not result.all():
-            print("Database is empty... seeding default layouts")
+            logger.info("DB is empty... seeding default layouts")
             await seed_data_from_yaml()
 
     yield
@@ -190,6 +192,7 @@ async def generate_document(
     task_staging_path.mkdir(parents=True, exist_ok=True)
 
     try:
+
         for uploaded_file in files:
             if not uploaded_file.filename:
                 continue
@@ -217,7 +220,12 @@ async def generate_document(
     except Exception as error:
         if task_staging_path.exists():
             shutil.rmtree(task_staging_path)
-        raise HTTPException(status_code=500, detail=f"Failed to securely stage file: {error}")
+        
+        logger.error("Failure during file staging loop", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="internal server error happened while staging scientific assets."
+        )
     
 
 @app.get("/api/tasks/{task_id}", response_model=TaskStatusResponse)
