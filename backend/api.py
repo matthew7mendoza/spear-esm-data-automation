@@ -177,6 +177,7 @@ async def generate_document(
     background_tasks: BackgroundTasks,
     target_doc: str = Form(...),
     model_provider: str = Form("gemini"),
+    custom_name: str | None = Form(None),
     files: list[UploadFile] = File(...),
     session: AsyncSession = Depends(get_db_session)
 ) -> JSONResponse:
@@ -200,7 +201,7 @@ async def generate_document(
             content = await uploaded_file.read()
             await asyncio.to_thread(file_disk_path.write_bytes, content)
         
-        new_task = Task(task_id=task_id, status="PENDING")
+        new_task = Task(task_id=task_id, status="PENDING", custom_name=custom_name)
         session.add(new_task)
         await session.commit()
 
@@ -243,6 +244,7 @@ async def get_task_status(task_id: str, session: AsyncSession = Depends(get_db_s
     return {
         "task_id": task.task_id,
         "status": task.status,
+        "custom_name": task.custom_name,
         "report": json.loads(task.report_json) if task.report_json else None,
         "source_context": task.source_context,
         "detail": task.detail

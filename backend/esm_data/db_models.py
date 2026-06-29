@@ -12,7 +12,6 @@ class FormTemplate(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     description: str | None = None
-
     questions: list["TemplateQuestion"] = Relationship(back_populates="template", cascade_delete=True)
 
 class TemplateQuestion(SQLModel, table=True):
@@ -23,7 +22,6 @@ class TemplateQuestion(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     text: str = Field(max_length=500)
     sort_order: int = Field(default=0)
-
     template_id: int = Field(foreign_key="formtemplate.id", ondelete="CASCADE")
     template: FormTemplate = Relationship(back_populates="questions")
 
@@ -34,6 +32,7 @@ class Task(SQLModel, table=True):
 
     task_id: str = Field(primary_key=True)
     status: str = Field(default="PENDING", index=True)
+    custom_name: str | None = Field(default=None)
     report_json: str | None = Field(default=None)
     source_context: str | None = Field(default=None)
     detail: str | None = Field(default=None)

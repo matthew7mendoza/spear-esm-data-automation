@@ -119,6 +119,7 @@ class TaskStatusResponse(BaseModel):
 
     task_id: str
     status: str
+    custom_name: str | None = None
     report: dict[str, Any] | None = None
     source_context: str | None = None
     detail: str | None = None

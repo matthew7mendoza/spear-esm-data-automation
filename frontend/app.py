@@ -51,7 +51,8 @@ def _get_task_profile(task_id: str) -> dict | None:
 def send_generation_request(
     target_document: str,
     chosen_engine: str,
-    uploaded_files: list
+    uploaded_files: list,
+    custom_name: str = ""
 ) -> None:
     """
     Packs up the loaded files and sends them to the backend to be processed
@@ -64,7 +65,8 @@ def send_generation_request(
 
     data_payload = {
         "target_doc": target_document,
-        "model_provider": MODEL_CONFIGURATIONS[chosen_engine]
+        "model_provider": MODEL_CONFIGURATIONS[chosen_engine],
+        "custom_name": custom_name
     }
 
     try:
@@ -98,6 +100,8 @@ def send_generation_request(
             case "COMPLETED":
                 st.session_state.generator_report = task_profile.get("report")
                 st.session_state.source_context = task_profile.get("source_context")
+                if "history_selectbox" in st.session_state:
+                    st.session_state.history_selectbox = "-- Select Past Run --"
                 status_container.empty()
                 st.success("Answers successfully written!")
                 return
@@ -182,10 +186,22 @@ def render_answers_and_missing_sections() -> None:
             st.error(f"- {missing_question}")
 
 
+def on_history_change():
+    """
+    Prevents other rnaodm clicks on the page
+    from cluttering historical view
+    """
+
+    selected_job_name = st.session_state.history_selectbox
+    if selected_job_name and selected_job_name != "-- Select Past Run --":
+        chosen_job = st.session_state.get("task_mapping", {}).get(selected_job_name)
+        if chosen_job:
+            st.session_state.generator_report = chosen_job.get("report")
+            st.session_state.source_context = chosen_job.get("source_context")
+
 def render_historical_sidebar():
     """
-    Asks backend for past runs,
-    then renders
+    Ask backend for past runs, then renders
     """
 
     st.sidebar.markdown("---")
@@ -199,20 +215,27 @@ def render_historical_sidebar():
             completed_tasks = [task for task in past_tasks if task.get("status") == "COMPLETED"]
 
             if not completed_tasks:
-                st.sidebar.caption("No history jobs")
+                st.sidebar.caption("No history job")
                 return
             
-            task_options = {f"Job {task['task_id'][:8]} ({task['task_id'][:8]})": task for task in completed_tasks}
-            selected_job_name = st.sidebar.selectbox("Reload a past analysis:", ["-- Select Past Run --"] + list(task_options.keys()))
+            task_options = {
+                (f"{task.get('custom_name')} ({task['task_id'][:8]})" if task.get("custom_name")
+                else f"Job {task['task_id'][:8]}"): task
+                for task in completed_tasks
+            }
 
-            if selected_job_name != "-- Select Past Run --":
-                chosen_job = task_options[selected_job_name]
-                st.session_state.generator_report = chosen_job.get("report")
-                st.session_state.source_context = chosen_job.get("source_context")
-                st.sidebar.success("Loaded data from historical record!")
-    
+            st.session_state.task_mapping = task_options
+            options_list = ["-- Select Past Run --"] + list(task_options.keys())
+
+            st.sidebar.selectbox(
+                "Reload a past analysis:",
+                options=options_list,
+                key="history_selectbox",
+                on_change=on_history_change,
+                disabled=st.session_state.job_running
+            )
     except Exception as error:
-        st.sidebar.caption("History tracker offline.")
+        st.sidebar.caption("History tracker offline!")
 
 def main() -> None:
     """
@@ -227,36 +250,93 @@ def main() -> None:
         st.session_state.generator_report = None
     if "source_context" not in st.session_state:
         st.session_state.source_context = None
+    if "job_running" not in st.session_state:
+        st.session_state.job_running = False
+
+    render_historical_sidebar()
     
     st.sidebar.header("Settings")
-    chosen_engine = st.sidebar.selectbox("Select AI Mode", list(MODEL_CONFIGURATIONS.keys()))
-    target_document = st.sidebar.selectbox("Chose a form template to fill out", fetch_server_templates())
-    judge_iterations = st.sidebar.slider("How many times should the judge test?", 2, 10, 3)
+    
+    chosen_engine = st.sidebar.selectbox(
+        "Select AI Model",
+        list(MODEL_CONFIGURATIONS.keys()),
+        disabled=st.session_state.job_running
+    )
+    target_document = st.sidebar.selectbox(
+        "Chose a form template to fill out",
+        fetch_server_templates(),
+        disabled=st.session_state.job_running
+    )
+    judge_iterations = st.sidebar.slider(
+        "How many times should the judge test?",
+        2, 10, 3,
+        disabled=st.session_state.job_running
+    )
 
     st.header(f"1. Generate {target_document}")
     uploaded_files = st.file_uploader(
         "Drop you scientific data, READMEs, publications, ect... here:",
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        disabled=st.session_state.job_running
     )
 
-    if st.button("Read Files & Write Answers", type="primary", disabled=not uploaded_files):
-        with st.spinner("Processing files..."):
-            send_generation_request(target_document, chosen_engine, uploaded_files)
+    custom_name = st.text_input(
+        "Label this extraction run (optional):", 
+        placeholder="ReadME Spear project #1",
+        disabled=st.session_state.job_running
+    )
+
+    if st.button(
+        "Read Files & Write Answers",
+        type="primary",
+        disabled=not uploaded_files or st.session_state.job_running
+    ):
+        st.session_state.job_running = True
+        st.session_state.pending_generation = {
+            "target_document": target_document,
+            "chosen_engine": chosen_engine,
+            "uploaded_files": uploaded_files,
+            "custom_name": custom_name
+        }
+        st.rerun()
+
+    if st.session_state.job_running and "pending_generation" in st.session_state:
+        args = st.session_state.pop("pending_generation")
+        send_generation_request(
+            args["target_document"],
+            args["chosen_engine"],
+            args["uploaded_files"],
+            args["custom_name"]
+        )
+        st.session_state.job_running = False
+        st.rerun()
 
     if not st.session_state.generator_report:
         return
     
-    render_answers_and_missing_sections()
-    render_historical_sidebar()
-
     st.markdown("---")
     st.header("2. LLM Judge")
-    st.markdown("Run the judge test to quantify the accurate of {target_documnet}")
+    st.markdown("Run the judge test to quantify the accuracy of {taget_document}")
 
-    if st.button("Run Stability Test"):
-        with st.spinner(f"Request {judge_iterations} concurrent background audit passes..."):
-            current_answers = st.session_state.generator_report.get("extracted_answers", {})
-            send_audit_request(chosen_engine, current_answers, judge_iterations)
+    if st.button(
+        "Run Stability Test",
+        disabled=st.session_state.job_running
+    ):
+        st.session_state.job_running = True
+        st.session_state.pending_audit = {
+            "chosen_engine": chosen_engine,
+            "judge_iterations": judge_iterations
+        }
+        st.rerun()
+
+    if st.session_state.job_running and "pending_audit" in st.session_state:
+        args = st.session_state.pop("pending_audit")
+        current_answers = st.session_state.generator_report.get("extracted_answers", {})
+        send_audit_request(args["chosen_engine"], current_answers, args["judge_iterations"])
+        st.session_state.job_running = False
+        st.rerun()
+    
+
 
 if __name__ == "__main__":
     main()
