@@ -49,14 +49,15 @@ def calculate_gwets_ac1(verdicts: list[str]) -> float:
 
 # Helper functions for calculate_reasoning_stabiliy
 def _extract_numeric(text: str) -> str:
-    regex_match = re.search(r"\b\d+\b", text)
-    return regex_match.group(0) if regex_match else text
+    """Finds first standalone whole number in text"""
+    return match.group(0) if (match := re.search(r"\b\d+\b", text)) else text
 
 def _extract_quote(text: str) -> str:
-    quotes = re.findall(r'["\'](.*?)["\']', text)
-    return " ".join(quotes) if quotes else text
+    """extracts all text inside any kind of quote"""
+    return " ".join(quotes) if (quotes := re.findall(r'["\'](.*?)["\']', text)) else text
 
 def _extract_assertion(text: str) -> str:
+    """cleans up text by removing punctiation and standardizing spaces"""
     return " ".join(re.sub(r"[^\w\s]", "", text).split())
 
 STRATEGY_REGISTRY: dict[str, Callable[[str], str]] = {
