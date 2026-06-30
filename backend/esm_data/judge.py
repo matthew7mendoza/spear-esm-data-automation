@@ -131,6 +131,42 @@ class LLMJudge:
                 return strategy
         return "Assertion"
     
+    async def _evaluate_single_node(
+        self,
+        item_id: str,
+        question: str,
+        run_index: int,
+        source_content: str,
+        paste_content: str,
+        semaphore: asyncio.Semaphore
+    ) -> tuple[str, int, str, str]:
+        """
+        Handles isolated async grading call
+        """
+
+        async with semaphore:
+            user_prompt = (
+                f"CHECKPOINT REQUIREMENT TO EVALUATE:\n{question}\n\n"
+                f"[SOURCE DOCUMENT CONTEXT]\n{source_content}\n\n"
+                f"[COMPLIANCE OUTPUT TO EVALUATE]\n{paste_content}"
+            )
+            
+            try:
+                response: ComplianceScoringSchema = await self.provider.generate_structured_async(
+                    prompt=user_prompt,
+                    system_instruction=self.system_instruction,
+                    response_schema=ComplianceScoringSchema
+                )
+
+                if not response:
+                    return item_id, run_index,"No", "Omitted due to empty response."
+
+                return item_id, run_index, response.answer, response.justification
+            
+            except Exception as execution_error:
+                logger.error(f"Async evaluation fault on item {item_id}, run {run_index}: {execution_error}")
+                return item_id, run_index, "No", f"Execution Exception Intercepted: {execution_error}"
+    
     async def run_stability_stress_test_async(
         self,
         *,
@@ -174,34 +210,17 @@ class LLMJudge:
 
         semaphore = asyncio.Semaphore(10)
 
-        async def worker_task(item_id: str, question: str, run_index: int) -> tuple[str, int, str, str]:
-            """
-            Helper function that handles single grading call to Judge
-            """
-
-            async with semaphore:
-                user_prompt = (
-                    f"CHECKPOINT REQUIREMENT TO EVALUATE:\n{question}\n\n"
-                    f"[SOURCE DOCUMENT CONTEXT]\n{source_content}\n\n"
-                    f"[COMPLIANCE OUTPUT TO EVALUATE]\n{paste_content}"
-                )
-                try:
-                    response: ComplianceScoringSchema = await self.provider.generate_structured_async(
-                        prompt=user_prompt,
-                        system_instruction=self.system_instruction,
-                        response_schema=ComplianceScoringSchema
-                    )
-                    if response:
-                        return item_id, run_index, response.answer, response.justification
                 
-                except Exception as execution_error:
-                    logger.error(f"Async evaluation fault on item {item_id}, run {run_index}: {execution_error}")
-                    return item_id, run_index, "No", f"Execution Exception Intercepted: {execution_error}"
-                
-                return item_id, run_index, "No", "Omitted due to empty response."
             
         tasks = [
-            worker_task(stream.item_id, stream.question, run_index)
+            self._evaluate_single_node(
+                stream.item_id,
+                stream.question,
+                run_index,
+                source_content,
+                paste_content,
+                semaphore
+            )
             for stream in audit_registry.values()
             for run_index in range(i_iterations)
         ]

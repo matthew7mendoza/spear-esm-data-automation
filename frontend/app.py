@@ -234,37 +234,43 @@ def render_historical_sidebar() -> None:
     """
 
     st.sidebar.markdown("---")
-    st.sidebar.header("Job History Log")
+    st.sidebar.header("History")
 
     try:
         response = requests.get(f"{BACKEND_URL}/api/tasks", timeout=5)
-        if response.status_code == 200:
-            past_tasks = response.json()
 
-            completed_tasks = [task for task in past_tasks if task.get("status") == "COMPLETED"]
+        if response.status_code != 200:
+            st.sidebar.caption("History tracker offline!")
+            return
+        
+        past_tasks = response.json()
+        completed_tasks = [task for task in past_tasks if task.get("status") == "COMPLETED"]
 
-            if not completed_tasks:
-                st.sidebar.caption("No history job")
-                return
-            
-            task_options = {
-                (f"{task.get('custom_name')} ({task['task_id'][:8]})" if task.get("custom_name")
-                else f"Job {task['task_id'][:8]}"): task
-                for task in completed_tasks
-            }
+        if not completed_tasks:
+            st.sidebar.caption("No history")
+            return
+        
+        task_options = {
+            (f"{task.get('custom_name')} ({task['task_id'][:8]})" if task.get("custom_name")
+            else f"Job {task['task_id'][:8]}"): task
+            for task in completed_tasks
+        }
 
-            st.session_state.task_mapping = task_options
-            options_list = ["-- Select Past Run --"] + list(task_options.keys())
+        st.session_state.task_mapping = task_options
+        options_list = ["-- Select Past Run"] + list(task_options.keys())
 
-            st.sidebar.selectbox(
-                "Reload a past analysis:",
-                options=options_list,
-                key="history_selectbox",
-                on_change=on_history_change,
-                disabled=st.session_state.job_running
-            )
+        st.sidebar.selectbox(
+            "Reload a past analysis:",
+            options=options_list,
+            key="history_selectbox",
+            on_change=on_history_change,
+            disabled=st.session_state.job_running
+        )
+    
     except Exception as error:
         st.sidebar.caption("History tracker offline!")
+
+
 
 def main() -> None:
     """

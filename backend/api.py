@@ -110,9 +110,13 @@ async def run_heavy_processing(
 
     async with async_session_creator() as session:
         task = await session.get(Task, task_id)
-        if task:
-            task.status = "PROCESSING"
-            await session.commit()
+
+        if not task:
+            logger.error(f"Aborting worker: tracking ticket context {task_id} not found")
+            return
+        
+        task.status = "PROCESSING"
+        await session.commit()
         
         statement = (
             select(TemplateQuestion)
@@ -145,19 +149,21 @@ async def run_heavy_processing(
 
         async with async_session_creator() as session:
             task = await session.get(Task, task_id)
-            if task:
-                task.status = "COMPLETED"
-                task.report_json = json.dumps(report)
-                task.source_context = final_unified_context
-                await session.commit()
-    
+            if not task:
+                return
+            task.status = "COMPLETED"
+            task.report_json = json.dumps(report)
+            task.source_context = final_unified_context
+            await session.commit()
+        
     except Exception as error:
         async with async_session_creator() as session:
             task = await session.get(Task, task_id)
-            if task:
-                task.status = "FAILED"
-                task.detail = str(error)
-                await session.commit()
+            if not task:
+                return
+            task.status = "FAILED"
+            task.detail = str(error)
+            await session.commit()
     
     finally:
         if staging_path.exists():
