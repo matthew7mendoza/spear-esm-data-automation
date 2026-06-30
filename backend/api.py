@@ -98,6 +98,7 @@ def _extract_context_cpu_worker(staging_path_str: str) -> str:
 
 
 async def run_heavy_processing(
+    *,
     task_id: str,
     target_doc: str,
     model_provider: str,

@@ -7,6 +7,7 @@ import logging
 import streamlit as st
 import requests
 import time
+from typing import Protocol
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,8 +16,13 @@ BACKEND_URL = "http://localhost:8000"
 
 MODEL_CONFIGURATIONS = {
     "Gemini": "gemini",
-    "Nvidia": "Nemotron"
+    "Nvidia": "nemotron"
 }
+
+class UploadedFileProtocol(Protocol):
+    name: str
+    type: str
+    def getvalue(self) -> bytes: ...
 
 def fetch_server_templates() -> list[str]:
     """
@@ -49,9 +55,10 @@ def _get_task_profile(task_id: str) -> dict | None:
     return None
 
 def send_generation_request(
+    *,
     target_document: str,
     chosen_engine: str,
-    uploaded_files: list,
+    uploaded_files: list[UploadedFileProtocol],
     custom_name: str = ""
 ) -> None:
     """
@@ -144,22 +151,24 @@ def send_audit_request(
             timeout=120
         )
 
-        if audit_response.status_code == 200:
-            metrics = audit_response.json()
-            st.success("Audit complete!")
-            kappa_score = metrics.get("metadata", {}).get("global_gwets_ac1", 0.0)
-            st.metric("Agreement score (Gwet's AC1)", kappa_score)
-            st.dataframe(
-                metrics.get("item_level_stability_metrics", []),
-                use_container_width=True
-            )
-        else:
+        if audit_response.status_code != 200:
             st.error(
                 f"Audit server error: {audit_response.json().get('detail')}"
             )
+            return
         
+        metrics = audit_response.json()
+        st.success("Audit complete!")
+        kappa_score = metrics.get("metadata", {}).get("global_gwets_ac1", 0.0)
+        st.metric("Agreement score (Gwet's AC1)", kappa_score)
+        st.dataframe(
+            metrics.get("item_level_stability_metrics", []),
+            use_container_width=True
+        )
+
     except requests.exceptions.RequestException as network_error:
         st.error(f"Communication loss with audit server: {network_error}")
+
 
 
 def render_answers_and_missing_sections() -> None:
@@ -187,7 +196,7 @@ def render_answers_and_missing_sections() -> None:
 
 
 
-def on_history_change():
+def on_history_change() -> None:
     """
     Prevents other random clicks on the page from cluttering historical view.
     Uses strict early-exit guard rails to keep execution depth perfectly flat.
@@ -219,7 +228,7 @@ def on_history_change():
     except Exception as network_error:
         st.error(f"Network error trying to fetch historical file profile: {network_error}")
 
-def render_historical_sidebar():
+def render_historical_sidebar() -> None:
     """
     Ask backend for past runs, then renders
     """

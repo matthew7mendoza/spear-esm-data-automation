@@ -6,7 +6,7 @@ between providers.
 """
 
 import os 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable, TypedDict, Unpack
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
@@ -20,19 +20,19 @@ class LLMProvider(Protocol):
     Protocol is used to abstract LLM Provider
     """
 
-    def generate_structured(
+    def generate_structured[T: BaseModel](
         self,
         prompt: str,
         system_instruction: str,
-        response_schema: type[BaseModel]
-    ) -> Any: ...
+        response_schema: type[T]
+    ) -> T: ...
 
-    async def generate_structured_async(
+    async def generate_structured_async[T: BaseModel](
         self,
         prompt: str,
         system_instruction: str, 
-        response_schema: type[BaseModel]
-    ) -> Any: ...
+        response_schema: type[T]
+    ) -> T: ...
 
 
 class GeminiProvider:
@@ -50,12 +50,12 @@ class GeminiProvider:
         self.client = genai.Client(api_key=key)
         self.model_name = model_name
 
-    def generate_structured(
+    def generate_structured[T: BaseModel](
         self,
         prompt: str,
         system_instruction: str,
-        response_schema: type[BaseModel]
-    ) -> Any:
+        response_schema: type[T]
+    ) -> T:
         """
         Requests Gemini LLM to respond according to strict
         response_schema
@@ -73,12 +73,12 @@ class GeminiProvider:
         )
         return response.parsed
     
-    async def generate_structured_async(
+    async def generate_structured_async[T: BaseModel](
         self,
         prompt: str,
         system_instruction: str, 
         response_schema: type[BaseModel]
-    ) -> Any:
+    ) -> T:
         """
         Async function for LLM Judge, 
         multiple evaluations simultaneously 
@@ -116,12 +116,12 @@ class OpenAIProvider:
         self.async_client = openai.AsyncOpenAI(api_key=key, base_url=base_url)
         self.model_name = model_name
 
-    def generate_structured(
+    def generate_structured[T: BaseModel](
         self,
         prompt: str,
         system_instruction: str, 
-        response_schema: type[BaseModel]
-    ) -> Any:
+        response_schema: type[T]
+    ) -> T:
         """
         Requests OpenAI to reply using strict response_schema
         """
@@ -143,12 +143,12 @@ class OpenAIProvider:
         )
         return response.choices[0].message.parsed
     
-    async def generate_structured_async(
+    async def generate_structured_async[T: BaseModel](
         self,
         prompt: str,
         system_instruction: str,
-        response_schema: type[BaseModel]
-    ) -> Any:
+        response_schema: type[T]
+    ) -> T:
         """
         Async function for LLM Judge, 
         multiple evaluations simultaneously 
@@ -172,6 +172,10 @@ class OpenAIProvider:
         )
         return response.choices[0].message.parsed
     
+class ProviderArgs(TypedDict, total=False):
+    api_key: str | None
+    model_name: str
+    base_url: str | None
 
 _REGISTRY: dict[str, type[LLMProvider]] = {}
 
@@ -182,7 +186,7 @@ def register_provider(name: str, provider_class: type[LLMProvider]) -> None:
 
     _REGISTRY[name.lower()] = provider_class
 
-def get_provider(name: str | None = None, **kwargs) -> LLMProvider:
+def get_provider(name: str | None = None, **kwargs: Unpack[ProviderArgs]) -> LLMProvider:
     """
     Looks at .env file to see what provider you want to use then sets
     up the class. Default is "gemini"
@@ -203,3 +207,4 @@ def get_provider(name: str | None = None, **kwargs) -> LLMProvider:
 
 register_provider("gemini", GeminiProvider)
 register_provider("openai", OpenAIProvider)
+register_provider("nemotron", OpenAIProvider)

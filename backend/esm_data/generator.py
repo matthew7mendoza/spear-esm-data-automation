@@ -7,7 +7,7 @@ Uses AI to answer questions
 import logging
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 import yaml
 
 from backend.esm_data.providers import LLMProvider
@@ -16,12 +16,17 @@ from backend.esm_data.models import(
     AgentExecutionError,
     AgentConfigurationError,
     DocumentExtractionError,
-    CorruptedDocumentError    
+    CorruptedDocumentError,
+    ExtractionReport   
 )
 
 from backend.esm_data.document import extract_text, EXTRACTOR_MAP
 
 logger = logging.getLogger(__name__)
+
+class TemplateConfig(TypedDict):
+    questions: list[str]
+    description: str | None
 
 class DocumentGenerator:
     """

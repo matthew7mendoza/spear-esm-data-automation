@@ -6,7 +6,7 @@ from pathlib import Path
 from collections import Counter
 from dataclasses import dataclass, field, InitVar
 from datetime import datetime
-from typing import Any
+from typing import TypedDict, never
 import yaml
 
 from backend.esm_data.providers import LLMProvider
@@ -22,6 +22,7 @@ from backend.esm_data.metrics import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class ItemAuditStream:
@@ -46,7 +47,7 @@ class ItemAuditStream:
         self.verdicts = ["No"] * iterations
         self.justifications = ["Omitted due to execution failure."] * iterations
 
-    def compute_reliability(self) -> dict[str, Any]:
+    def compute_reliability(self) -> dict[str, str]:
         """
         Calculate if the AI is reliable for any specific question by looking 
         at the distribution of the test runs
@@ -60,7 +61,24 @@ class ItemAuditStream:
             "reasoning_stability_r_stab": round(calculate_reasoning_stability(self.justifications, self.strategy), 2),
             "raw_dict_distribution": Counter(self.verdicts)
         }
-    
+
+
+class QuestionRealiabilityMetrics(TypedDict):
+    question: str
+    inferred_strategy: str
+    gwets_ac1_gamma: float
+    reasoning_stability_r_stab: float
+    raw_dict_distribution: Counter[str]
+
+class AuditReportMetadata(TypedDict):
+    profile_prefix: str
+    execution_timestamp: str
+    total_runs_i: int
+    global_gwets_ac1: float
+
+class AuditStressTestReport(TypedDict):
+    metadata: AuditReportMetadata
+    item_level_stability_metrics: list[QuestionRealiabilityMetrics]
 
 class LLMJudge:
     """
@@ -115,11 +133,12 @@ class LLMJudge:
     
     async def run_stability_stress_test_async(
         self,
+        *,
         source_content: str,
         paste_content: str,
         prefix_label: str,
         i_iterations: int = 5
-    ) -> dict[str, Any]:
+    ) -> AuditStressTestReport | dict[str, never]:
         """
         Parsed generated answers, runs Judges in parralel for a single question across multiple runs
         returns accuracy report

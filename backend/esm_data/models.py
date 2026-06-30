@@ -2,9 +2,8 @@
 This file defines the standard data structures, rules, and custom errors
 """
 
-from typing import Literal 
+from typing import Literal, TypedDict
 from pydantic import BaseModel, Field
-from typing import Any
 
 
 # Error Boundaries
@@ -112,6 +111,13 @@ class FormResponses(BaseModel):
         ..., description="Questions that could not be verified or answered using the source documents."
     )
 
+class ExtractionReport(TypedDict):
+    """
+    Explicit typedict for AI generator output
+    """
+    extracted_answers: dict[str, str]
+    missing_information: list[str]
+
 class TaskStatusResponse(BaseModel):
     """
     How the data should look when sent to frontend
@@ -120,7 +126,7 @@ class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
     custom_name: str | None = None
-    report: dict[str, Any] | None = None
+    report: ExtractionReport | None = None
     source_context: str | None = None
     detail: str | None = None
 
@@ -130,7 +136,7 @@ class AuditRequest(BaseModel):
     """
 
     source_context: str
-    answers: dict[str, Any]
+    answers: dict[str, str]
     iterations: int = 3
 
 class TemplateCreateRequest(BaseModel):

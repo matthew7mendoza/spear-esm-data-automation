@@ -45,6 +45,24 @@ def calculate_gwets_ac1(verdicts: list[str]) -> float:
     return (p_a - p_e) / (1.0 - p_e)
 
 
+# Helper functions for calculate_reasoning_stabiliy
+def _extract_numeric(text: str) -> str:
+    regex_match = re.search(r"\b\d+\b", text)
+    return regex_match.group(0) if regex_match else text
+
+def _extract_quote(text: str) -> str:
+    quotes = re.findall(r'["\'](.*?)["\']', text)
+    return " ".join(quotes) if quotes else text
+
+def _extract_assertion(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s]", text).split())
+
+STRATEGY_REGISTRY = {
+    "Numeric": _extract_numeric,
+    "Quote": _extract_quote,
+    "Assertion": _extract_assertion
+}
+
 # (Size of Largest Identical Text Pile / Total Explanations Collected) * 100
 def calculate_reasoning_stability(
     justifications: list[str],
@@ -60,18 +78,13 @@ def calculate_reasoning_stability(
         return 0.0
     
     fingerprints = []
+
+    extractor = STRATEGY_REGISTRY.get(strategy, _extract_assertion)
+
     for text in justifications:
         normalized = text.strip().lower()
-        if strategy == "Numeric":
-            match = re.search(r"\b\d+\b", normalized)
-            fingerprints.append(match.group(0) if match else normalized)
-        elif strategy == "Quote":
-            quotes = re.findall(r'["\'](.*?)["\']', normalized)
-            fingerprints.append(" ".join(quotes) if quotes else normalized)
-        else:
-            fingerprints.append(" ".join(re.sub(r"[^\w\s]", "", normalized).split()))
-
+        fingerprints.append(extractor(normalized))
+    
     cluster_counts = Counter(fingerprints)
     dominant_cluster_size = cluster_counts.most_common(1)[0][1]
-
     return (dominant_cluster_size / total_runs) * 100.0

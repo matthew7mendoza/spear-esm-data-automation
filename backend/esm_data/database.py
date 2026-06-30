@@ -16,7 +16,9 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite+aiosqlite:///{DEFAULT_DB_
 
 
 async_engine = create_async_engine(DATABASE_URL, echo=False, future=True)
-async_session_creator = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+async_session_creator: async_sessionmaker[AsyncSession] = async_sessionmaker(
+    async_engine, class_=AsyncSession, expire_on_commit=False
+)
 
 async def init_db_tables() -> None:
     """
