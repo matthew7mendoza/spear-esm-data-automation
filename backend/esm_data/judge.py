@@ -3,6 +3,7 @@ from collections import Counter
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime
 import json
+import itertools
 import logging
 from importlib.resources import files
 from pathlib import Path
@@ -216,7 +217,7 @@ class LLMJudge:
                 question=question,
                 strategy=self._infer_evaluation_strategy(question),
             )
-            for index, (question, _) in enumerate(raw_answers.items()),
+            for index, (question, _) in enumerate(raw_answers.items())
         ]
         
         if not rubric_items:
@@ -244,8 +245,7 @@ class LLMJudge:
                 paste_content=paste_content,
                 semaphore=semaphore
             )
-            for stream in audit_registry.values()
-            for run_index in range(i_iterations)
+            for stream, run_index in itertools.product(audit_registry.values(), range(i_iterations))
         ]
             
         # Fire all API tasks in parralel!

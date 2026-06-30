@@ -41,19 +41,17 @@ def fetch_server_templates() -> list[str]:
     """
     Asks backend for list of available document forms to fill
     """
-
     try:
         response = requests.get(f"{BACKEND_URL}/api/templates", timeout=5)
-        if response.status_code == 200:
-            return response.json()
-        
     except requests.exceptions.RequestException as error:
         logger.warning(f"Unable to fetch templates from worker program: {error}")
+        return ["DMP", "README"]
 
-    # Must fix this hard coding later
+    if response.status_code != 200:
+        logger.warning(f"Backend returned unexpected status: {response.status_code}")
+        return ["DMP", "README"]
 
-    return ["DMP", "README"]
-
+    return response.json()
 
 def _get_task_profile(task_id: str) -> TaskProfileDict | None:
     """
@@ -61,8 +59,9 @@ def _get_task_profile(task_id: str) -> TaskProfileDict | None:
     """
     try:
         response = requests.get(f"{BACKEND_URL}/api/tasks/{task_id}", timeout=5)
-        if response.status_code == 200:
-            return response.json()
+        if response.status_code != 200:
+            return None
+        return response.json()
     except requests.exceptions.RequestException:
         pass
     return None
