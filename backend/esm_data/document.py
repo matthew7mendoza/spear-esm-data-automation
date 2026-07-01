@@ -5,6 +5,7 @@ Convert files into structured string formats
 from collections.abc import Callable
 import logging
 from pathlib import Path
+from typing import Final
 
 from markitdown import MarkItDown
 
@@ -15,7 +16,7 @@ __all__ = ["EXTRACTOR_MAP", "extract_text"]
 logger = logging.getLogger(__name__)
 _converter: MarkItDown = MarkItDown()
 
-def _extract_plain_text(path: Path) -> str:
+def _extract_plain_text(path: Path, /) -> str:
     """
     Reads data files
     """
@@ -25,7 +26,7 @@ def _extract_plain_text(path: Path) -> str:
         logger.error(f"Encoding mismatch on text parsing for: {path.name}", exc_info=True)
         raise CorruptedDocumentError(f"File '{path.name}' contains invalid non UTF-8 characters") from decode_error
 
-def _extract_complex_doc(path: Path) -> str:
+def _extract_complex_doc(path: Path, /) -> str:
     """
     Reads complex files to markdown
     """
@@ -40,7 +41,7 @@ def _extract_complex_doc(path: Path) -> str:
         logger.error(f"MarkItDown unable to parse {path.name}", exc_info=True)
         raise CorruptedDocumentError(f"Invalid structure mapping in: '{path.name}'") from val_error
     
-EXTRACTOR_MAP: dict[str, Callable[[Path], str]] = {
+EXTRACTOR_MAP: Final[dict[str, Callable[[Path], str]]] = {
     ".txt": _extract_plain_text,
     ".md": _extract_plain_text,
     ".csv": _extract_plain_text,
@@ -50,19 +51,16 @@ EXTRACTOR_MAP: dict[str, Callable[[Path], str]] = {
     ".pptx": _extract_complex_doc
 }
 
-def extract_text(file_path: str | Path) -> str:
+def extract_text(file_path: str | Path, /) -> str:
     """
     Maps file extensions to correct text extractor
     """
-
     path = Path(file_path)
+
     if not path.exists():
         raise FileNotFoundError(f"File not found {path.absolute()}")
     
-    extension = path.suffix.lower()
-    extractor_function = EXTRACTOR_MAP.get(extension)
-
-    if not extractor_function:
-        raise ValueError(f"Unsupported file format mapping request: '{extension}'")
+    if not (extractor_function := EXTRACTOR_MAP.get(path.suffix.lower())):
+        raise ValueError(f"Unsupported file format mapping request: '{path.suffix.lower()}'")
     
     return extractor_function(path).strip()

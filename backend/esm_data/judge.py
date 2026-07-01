@@ -7,7 +7,7 @@ import itertools
 import logging
 from importlib.resources import files
 from pathlib import Path
-from typing import Literal, Never, TypedDict
+from typing import Literal, Never, TypedDict, Final
 
 import openai
 import yaml
@@ -21,6 +21,7 @@ from backend.esm_data.models import (
     AgentConfigurationError,
     ComplianceScoringSchema,
     RubricItemConfig,
+    ItemId
 )
 from backend.esm_data.providers import LLMProvider
 
@@ -40,7 +41,7 @@ class ItemAuditStream:
     Stores and manages the grading history for a single form question.
     This class tracks how the AI answered one specific question across all test runs
     """
-    item_id: str
+    item_id: ItemId
     question: str
     strategy: Literal["Numeric", "Quote", "Assertion"]
     iterations: InitVar[int]
@@ -56,6 +57,9 @@ class ItemAuditStream:
 
         self.verdicts = ["No"] * iterations
         self.justifications = ["Omitted due to execution failure."] * iterations
+
+    def __repr__(self) -> str:
+        return f"ItemAuditStream(item_id={self.item_id!r}, strategy={self.strategy!r}, iterations={len(self.verdicts)})"
 
     def __str__(self) -> str:
         """logging string"""
@@ -101,7 +105,7 @@ class LLMJudge:
 
     __slots__ = ("provider", "system_instruction")
 
-    STRATEGY_KEYWORDS: dict[str, list[str]] = {
+    STRATEGY_KEYWORDS: Final[dict[str, list[str]]] = {
         "Numeric": ["count", "word", "total", "volume", "number"],
         "Quote": ["verbatim", "string", "quote", "text", "url"]
     }

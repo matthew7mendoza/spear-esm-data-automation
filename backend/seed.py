@@ -13,6 +13,8 @@ import yaml
 
 from backend.esm_data.database import async_session_creator, init_db_tables
 from backend.esm_data.db_models import FormTemplate, TemplateQuestion
+from backend.esm_data.models import TemplateName
+from backend.esm_data.generator import TemplateConfig
 
 __all__ = ["add_single_template", "seed_data_from_yaml"]
 
@@ -24,7 +26,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def add_single_template(session: AsyncSession, name: str, contents: dict) -> None:
+async def add_single_template(session: AsyncSession, name: TemplateName, contents: TemplateConfig) -> None:
     """
     Handles the database checks and insertion for one single form template
     """

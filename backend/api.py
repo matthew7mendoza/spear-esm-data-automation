@@ -3,16 +3,18 @@ FastAPI backend
 uvicorn api:app --reload --port 8000
 """
 
+
 import asyncio
-from concurrent.futures import ProcessPoolExecutor
-from contextlib import asynccontextmanager
-from importlib.resources import files
 import json
 import logging
-from pathlib import Path
 import shutil
-from typing import Never, Final
 import uuid
+from concurrent.futures import ProcessPoolExecutor
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from importlib.resources import files
+from pathlib import Path
+from typing import Final, Never 
 
 from fastapi import (
     BackgroundTasks,
@@ -26,6 +28,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -34,18 +37,32 @@ from backend.esm_data.db_models import FormTemplate, Task, TemplateQuestion
 from backend.esm_data.document import EXTRACTOR_MAP, extract_text
 from backend.esm_data.generator import DocumentGenerator
 from backend.esm_data.judge import AuditStressTestReport, LLMJudge
-from backend.esm_data.models import AgentConfigurationError, AuditRequest, TaskStatusResponse, TemplateCreateRequest
+from backend.esm_data.models import (
+    AgentConfigurationError,
+    AgentExecutionError,
+    DocumentExtractionError,
+    AuditRequest,
+    TaskStatusResponse,
+    TemplateCreateRequest,
+    TaskId
+)
 from backend.esm_data.providers import get_provider
 from backend.seed import seed_data_from_yaml
 
 
 __all__ = ["app"]
 
-PROJECT_ROOT = Path(str(files("backend"))).parent
-RUN_DIR = PROJECT_ROOT / "data" / "runtime_staging"
+PROJECT_ROOT: Final[Path] = Path(str(files("backend"))).parent
+RUN_DIR: Final[Path] = PROJECT_ROOT / "data" / "runtime_staging"
+logger: Final[logging.Logger] = logging.getLogger(__name__)
+cpu_process_pool: Final[ProcessPoolExecutor] = ProcessPoolExecutor(max_workers=2)
 
-logger = logging.getLogger(__name__)
-cpu_process_pool: ProcessPoolExecutor = ProcessPoolExecutor(max_workers=2)
+@dataclass(frozen=True)
+class GenerationPayload:
+    target_doc: str = Form(...)
+    model_provider: str = Form("gemini")
+    custom_name: str | None = Form(None)
+    files: list[UploadFile] = File(...)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -100,19 +117,14 @@ def _extract_context_cpu_worker(staging_path_str: str) -> str:
 
 async def run_heavy_processing(
     *,
-    task_id: str,
+    task_id: TaskId,
     target_doc: str,
     model_provider: str,
     staging_path: Path
 ) -> None:
-    """
-    Handles the long document reading and AI tasks
-    """
-
+    """Handles the long document reading and AI tasks."""
     async with async_session_creator() as session:
-        task = await session.get(Task, task_id)
-
-        if not task:
+        if not (task := await session.get(Task, task_id)):
             logger.error(f"Aborting worker: tracking ticket context {task_id} not found")
             return
         
@@ -149,27 +161,26 @@ async def run_heavy_processing(
         )
 
         async with async_session_creator() as session:
-            task = await session.get(Task, task_id)
-            if not task:
+            if not (task := await session.get(Task, task_id)):
                 return
             task.status = "COMPLETED"
             task.report_json = json.dumps(report)
             task.source_context = final_unified_context
             await session.commit()
-        
-    except Exception as error:
-        async with async_session_creator() as session:
-            task = await session.get(Task, task_id)
-            if not task:
-                return
-            task.status = "FAILED"
-            task.detail = str(error)
-            await session.commit()
+            
+    except Exception as error:  
+        try:
+            async with async_session_creator() as session:
+                if task := await session.get(Task, task_id):
+                    task.status = "FAILED"
+                    task.detail = str(error)
+                    await session.commit()
+        except SQLAlchemyError as db_error:
+            logger.error(f"DB failed to update task failure status: {db_error}")
     
     finally:
         if staging_path.exists():
             await asyncio.to_thread(shutil.rmtree, staging_path)
-        
 
 @app.get("/api/templates")
 async def get_templates(session: AsyncSession = Depends(get_db_session)) -> list[str]:
@@ -184,10 +195,7 @@ async def get_templates(session: AsyncSession = Depends(get_db_session)) -> list
 async def generate_document(
     *,
     background_tasks: BackgroundTasks,
-    target_doc: str = Form(...),
-    model_provider: str = Form("gemini"),
-    custom_name: str | None = Form(None),
-    files: list[UploadFile] = File(...),
+    payload: GenerationPayload = Depends(),
     session: AsyncSession = Depends(get_db_session)
 ) -> JSONResponse:
     """
@@ -201,51 +209,49 @@ async def generate_document(
     task_staging_path = RUN_DIR / task_id
     task_staging_path.mkdir(parents=True, exist_ok=True)
 
-    try:
-        for uploaded_file in files:
-            if not uploaded_file.filename:
-                continue
-            file_disk_path = task_staging_path / Path(uploaded_file.filename).name
+    for uploaded_file in payload.files:
+        if not uploaded_file.filename:
+            continue
+        
+        file_disk_path = task_staging_path / Path(uploaded_file.filename).name
+
+        try:
             content = await uploaded_file.read()
             await asyncio.to_thread(file_disk_path.write_bytes, content)
+        except OSError as io_error:
+            if task_staging_path.exists():
+                shutil.rmtree(task_staging_path)
+            logger.error("Disk write fault encountered during file staging loop", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Storage IO error while staging files..."
+            ) from io_error
+        
+        try:
+            new_task = Task(task_id=task_id, status="PENDING", custom_name=payload.custom_name)
+            session.add(new_task)
+            await session.commit()
+        except SQLAlchemyError as db_error:
+            if task_staging_path.exists():
+                shutil.rmtree(task_staging_path)
+            logger.error("Database tracking error while performing task", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal database fail occured while processing task record"
+            ) from db_error
+        
+        background_tasks.add_task(
+            run_heavy_processing,
+            task_id=task_id,
+            target_doc=payload.target_doc.upper(),
+            model_provider=payload.model_provider,
+            staging_path=task_staging_path
+        )
 
-    except OSError as io_error:
-        if task_staging_path.exists():
-            shutil.rmtree(task_staging_path)
-        logger.error("Disk write fault encountered during file staging loop", exc_info=True)
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error happened while staging files on disk storage."
-        ) from io_error
-
-    try:
-        new_task = Task(task_id=task_id, status="PENDING", custom_name=custom_name)
-        session.add(new_task)
-        await session.commit()
-
-    except Exception as db_error:
-        if task_staging_path.exists():
-            shutil.rmtree(task_staging_path)
-        logger.error("Database tracking error while performing task", exc_info=True)
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal database fail occured while processing task record."
-        ) from db_error
-    
-    background_tasks.add_task(
-        run_heavy_processing,
-        task_id=task_id,
-        target_doc=target_doc.upper(),
-        model_provider=model_provider,
-        staging_path=task_staging_path
-    )
-
-    return JSONResponse(
-        status_code=status.HTTP_202_ACCEPTED,
-        content={"task_id": task_id, "status": "PENDING"}
-    )
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"task_id": task_id, "status": "PENDING"}
+        )
     
 @app.get("/api/tasks/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(task_id: str, session: AsyncSession = Depends(get_db_session)) -> TaskStatusResponse:

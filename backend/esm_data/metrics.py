@@ -12,7 +12,7 @@ from typing import Literal
 __all__ = ["calculate_percentage_agreement", "calculate_gwets_ac1", "calculate_reasoning_stability"]
 
 # (Dominant Votes / Total Votes) * 100
-def calculate_percentage_agreement(verdicts: list[str]) -> float:
+def calculate_percentage_agreement(verdicts: list[str], /) -> float:
     """Computes the raw percentage proportion of matching binary classifications."""
     if not verdicts:
         return 0.0
@@ -25,7 +25,7 @@ def calculate_percentage_agreement(verdicts: list[str]) -> float:
 
 
 # (Actual Agreement - Chance Agreement) / (1 - Chance Agreement)
-def calculate_gwets_ac1(verdicts: list[str]) -> float:
+def calculate_gwets_ac1(verdicts: list[str], /) -> float:
     """Calculates Gwet's AC1 configuration index adjusted for extreme trait rarity distributions."""
     total_runs = len(verdicts)
     if total_runs <= 1:
@@ -81,7 +81,6 @@ def calculate_reasoning_stability(
         return 0.0
     
     fingerprints = []
-
     extractor = STRATEGY_REGISTRY.get(strategy, _extract_assertion)
 
     for text in justifications:
