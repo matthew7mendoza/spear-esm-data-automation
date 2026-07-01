@@ -2,7 +2,7 @@
 This file defines the standard data structures, rules, and custom errors
 """
 
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, NewType
 from pydantic import BaseModel, ConfigDict, Field
 
 #namespace
@@ -24,6 +24,10 @@ __all__ = [
     "AuditRequest",
     "TemplateCreateRequest",
 ]
+
+TaskId = NewType("TaskId", str)
+ItemId = NewType("ItemId", str)
+TemplateName = NewType("TemplateName", str)
 
 # ----------Error Boundaries----------------
 class SpearAutomationError(Exception):

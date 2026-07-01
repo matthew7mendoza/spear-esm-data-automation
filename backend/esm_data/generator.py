@@ -102,22 +102,22 @@ class DocumentGenerator:
         Finds all supported files in a folder, extracts their text, combines them together, sends to the AI
         """
 
-        doc_type_upper = target_document_type.upper()
-        active_template = self.templates.get(doc_type_upper)
-
-        if not active_template:
-            raise ValueError(f"The document type '{target_document_type}' was not found in templates.json")
+        if not (active_template := self.templates.get(target_document_type.upper())):
+            raise ValueError(f"The document type '{target_document_type} was not found in templates.yaml'")
         
         input_path = Path(input_dir)
         if not input_path.exists():
             input_path.mkdir(parents=True, exist_ok=True)
-            logger.info(f"The requested folder was missing, so a new empty folder was created: {input_path.resolve()}")
+            logger.info(f"Folder was missing, so a new empty folder was created: {input_path.resolve()}")
             return {}
         
         valid_workspace_files = [
             file for file in input_path.iterdir()
             if file.is_file() and file.suffix.lower() in EXTRACTOR_MAP
         ]
+
+        if not valid_workspace_files:
+            raise AgentExecutionError("Finished checking the folder, no text could successfully be read from any of the files")
 
         aggregated_text_blocks = []
         for file_path in valid_workspace_files:

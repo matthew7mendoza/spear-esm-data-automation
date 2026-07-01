@@ -11,7 +11,7 @@ import json
 import logging
 from pathlib import Path
 import shutil
-from typing import Never
+from typing import Never, Final
 import uuid
 
 from fastapi import (
@@ -254,11 +254,9 @@ async def get_task_status(task_id: str, session: AsyncSession = Depends(get_db_s
     checks if AI is still writing, finished, or crashed
     """
 
-    task = await session.get(Task, task_id)
+    if not (task := await session.get(Task, task_id)):
+        raise HTTPException(status_code=404, detail="The request job does not exist.")
 
-    if not task:
-        raise HTTPException(status_code=404, detail="The request job token does not exist.")
-    
     return TaskStatusResponse(
         task_id=task.task_id,
         status=task.status,
@@ -278,12 +276,9 @@ async def create_custom_template(
     """
 
     template_name_upper = payload.name.upper()
-
-    existing = await session.exec(
-        select(FormTemplate).where(FormTemplate.name == template_name_upper)
-    )
-    if existing.one_or_none():
+    if (await session.exec(select(FormTemplate).where(FormTemplate.name == template_name_upper))).one_or_none():
         raise HTTPException(status_code=400, detail=f"Template '{template_name_upper}' already exists!")
+
     
     db_questions = [
         TemplateQuestion(text=question_text, sort_order=index)

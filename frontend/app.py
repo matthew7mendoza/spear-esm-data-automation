@@ -3,9 +3,10 @@ Streamlit front end
 takes files and gives to backend
 """
 
+import contextlib
 import logging
 import time
-from typing import Protocol, TypedDict
+from typing import Protocol, TypedDict, Final
 
 import requests
 import streamlit as st
@@ -17,9 +18,9 @@ __all__ = ["main"]
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL: Final[str] = "http://localhost:8000"
 
-MODEL_CONFIGURATIONS = {
+MODEL_CONFIGURATIONS = Final[dict[str, str]] = {
     "Gemini": "gemini",
     "Nvidia": "nemotron"
 }
@@ -57,13 +58,15 @@ def _get_task_profile(task_id: str) -> TaskProfileDict | None:
     """
     helper function Gets backend training tickets
     """
-    try:
+    
+    with contextlib.suppress(requests.exceptions.RequestException):
         response = requests.get(f"{BACKEND_URL}/api/tasks/{task_id}", timeout=5)
+
         if response.status_code != 200:
             return None
+        
         return response.json()
-    except requests.exceptions.RequestException:
-        pass
+    
     return None
 
 def send_generation_request(
@@ -109,10 +112,9 @@ def send_generation_request(
     for _ in range(450):
         status_container.info("AI is analyzing files and compiling compliance documentation... Please wait...")
 
-        task_profile = _get_task_profile(task_id)
-        if not task_profile:
+        if not (task_profile := _get_task_profile(task_id)):
             status_container.empty()
-            st.error("Lost communication tracking link with backend processing ndoe.")
+            st.error("Lost communication tracking link with backend processing node.")
             return
         
         match task_profile.get("status"):
@@ -138,6 +140,7 @@ def send_generation_request(
 
 
 def send_audit_request(
+    *,
     chosen_engine: str,
     answers: dict,
     judge_iterations: int
@@ -162,25 +165,23 @@ def send_audit_request(
             params=parameters,
             timeout=120
         )
-
-        if audit_response.status_code != 200:
-            st.error(
-                f"Audit server error: {audit_response.json().get('detail')}"
-            )
-            return
-        
-        metrics = audit_response.json()
-        st.success("Audit complete!")
-        kappa_score = metrics.get("metadata", {}).get("global_gwets_ac1", 0.0)
-        st.metric("Agreement score (Gwet's AC1)", kappa_score)
-        st.dataframe(
-            metrics.get("item_level_stability_metrics", []),
-            use_container_width=True
-        )
-
     except requests.exceptions.RequestException as network_error:
         st.error(f"Communication loss with audit server: {network_error}")
-
+        return
+    
+    
+    if audit_response.status_code != 200:
+        st.error(f"Audit server error: {audit_response.json().get('detail')}")
+        return
+    
+    metrics = audit_response.json()
+    st.success("Audit complete!")
+    kappa_score = metrics.get("metadata", {}).get("global_gwets_ac1", 0.0)
+    st.metric("Agreement score (Gwet's AC1)", kappa_score)
+    st.dataframe(
+        metrics.get("item_level_stability_metrics", []),
+        use_container_width=True
+    )
 
 
 def render_answers_and_missing_sections() -> None:
@@ -213,33 +214,31 @@ def on_history_change() -> None:
     Prevents other random clicks on the page from cluttering historical view.
     Uses strict early-exit guard rails to keep execution depth perfectly flat.
     """
+
     selected_job_name = st.session_state.history_selectbox
-    
     if not selected_job_name or selected_job_name == "-- Select Past Run --":
         return
-
-    chosen_job = st.session_state.get("task_mapping", {}).get(selected_job_name)
-    if not chosen_job:
+    
+    if not (chosen_job := st.session_state.get("task_mapping", {}).get(selected_job_name)):
         return
 
-    task_id = chosen_job.get("task_id")
-    if not task_id:
+    if not (task_id := chosen_job.get("task_id")):
         return
-
+    
     try:
         response = requests.get(f"{BACKEND_URL}/api/tasks/{task_id}", timeout=5)
-
-        if response.status_code != 200:
-            st.error("Failed to extract full analysis data from backend node.")
-            return
-        
-        full_job_payload = response.json()
-        st.session_state.generator_report = full_job_payload.get("report")
-        st.session_state.source_context = full_job_payload.get("source_context")
-
     except requests.exceptions.RequestException as network_transport_fault:
         logger.error("Network communication loss when trying to read historical entries", exc_info=True)
         st.error(f"Network error trying to fetch historical file profile: {network_transport_fault}")
+        return
+    
+    if response.status_code != 200:
+        st.error("Failed to extract full analysis data from backend node.")
+        return
+    
+    full_job_payload = response.json()
+    st.session_state.generator_report = full_job_payload.get("report")
+    st.session_sate.source_context = full_job_payload.get("source_context")
 
 def render_historical_sidebar() -> None:
     """
@@ -248,40 +247,40 @@ def render_historical_sidebar() -> None:
 
     try:
         response = requests.get(f"{BACKEND_URL}/api/tasks", timeout=5)
-
-        if response.status_code != 200:
-            st.sidebar.caption("History tracker offline!")
-            return
-        
-        past_tasks = response.json()
-        completed_tasks = [
-            task for task in past_tasks if task.get("status") == "COMPLETED"
-        ]
-
-        if not completed_tasks:
-            st.sidebar.caption("No history")
-            return
-        
-        task_options = {
-            (f"{task.get('custom_name')} ({task['task_id'][:8]})" if task.get("custom_name")
-            else f"Job {task['task_id'][:8]}"): task
-            for task in completed_tasks
-        }
-
-        st.session_state.task_mapping = task_options
-        options_list = ["-- Select Past Run", *task_options]
-
-        st.sidebar.selectbox(
-            "Reload a past analysis:",
-            options=options_list,
-            key="history_selectbox",
-            on_change=on_history_change,
-            disabled=st.session_state.job_running
-        )
-    
     except requests.exceptions.RequestException as connection_offline_error:
         logger.warning(f"Unable to read connection tracking indexes: {connection_offline_error}")
         st.sidebar.caption("History tracker offline!")
+        return
+    
+    if response.status_code != 200:
+        st.sidebar.caption("History tracker offline!")
+        return
+    
+    past_tasks = response.json()
+    completed_tasks = [
+        task for task in past_tasks if task.get("status") == "COMPLETED"
+    ]
+
+    if not completed_tasks:
+        st.sidebar.caption("No history")
+        return
+    
+    task_options = {
+        (f"{task.get('custom_name')} ({task['task_id'][:8]})" if task.get("custom_name")
+        else f"Job {task['task_id'][:8]}"): task
+        for task in completed_tasks
+    }
+
+    st.session_state.task_mapping = task_options
+    options_list = ["-- Select Past Run --", *task_options]
+
+    st.sidebar.selectbox(
+        "Reload a past analysis:",
+        options=options_list,
+        key="history_selectbox",
+        on_change=on_history_change,
+        disabled=st.session_sate.job_running
+    )
 
 
 def main() -> None:
