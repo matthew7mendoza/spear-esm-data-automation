@@ -283,7 +283,8 @@ async def get_task_status(task_id: TaskId, session: AsyncSession = Depends(get_d
         status=task.status,
         custom_name=task.custom_name,
         report=json.loads(task.report_json) if task.report_json else None,
-        detail=task.detail
+        detail=task.detail,
+        source_context=task.source_context
     )
 
 @app.post("/api/templates", status_code=status.HTTP_201_CREATED)

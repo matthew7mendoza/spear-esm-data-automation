@@ -80,6 +80,8 @@ def send_generation_request(
     Packs up the loaded files and sends them to the backend to be processed
     """
 
+    st.session_state.audit_metrics = None
+
     file_payload = [
         ("files", (file.name, file.getvalue(), file.type))
         for file in uploaded_files
@@ -174,13 +176,15 @@ def send_audit_request(
         st.error(f"Audit server error: {audit_response.json().get('detail')}")
         return
     
+    st.session_state.audit_metrics = audit_response.json()
+    
     metrics = audit_response.json()
     st.success("Audit complete!")
     kappa_score = metrics.get("metadata", {}).get("global_gwets_ac1", 0.0)
     st.metric("Agreement score (Gwet's AC1)", kappa_score)
     st.dataframe(
         metrics.get("item_level_stability_metrics", []),
-        use_container_width=True
+        width="stretch"
     )
 
 
@@ -237,6 +241,7 @@ def on_history_change() -> None:
         return
     
     full_job_payload = response.json()
+    st.session_state.audit_metrics = None
     st.session_state.generator_report = full_job_payload.get("report")
     st.session_state.source_context = full_job_payload.get("source_context")
 
@@ -296,6 +301,8 @@ def main() -> None:
         st.session_state.generator_report = None
     if "source_context" not in st.session_state:
         st.session_state.source_context = None
+    if "audit_metrics" not in st.session_state:      
+        st.session_state.audit_metrics = None        
     if "job_running" not in st.session_state:
         st.session_state.job_running = False
     
@@ -388,6 +395,16 @@ def main() -> None:
             "judge_iterations": judge_iterations
         }
         st.rerun()
+
+    if st.session_state.audit_metrics:
+        st.markdown("---")
+        st.success("Audit complete!")
+        kappa_score = st.session_state.audit_metrics.get("metadata", {}).get("global_gwets_ac1", 0.0)
+        st.metric("Agreement score (Gwet's AC1)", kappa_score)
+        st.dataframe(
+            st.session_state.audit_metrics.get("item_level_stability_metrics", []),
+            width="stretch"
+        )
 
 
 if __name__ == "__main__":
