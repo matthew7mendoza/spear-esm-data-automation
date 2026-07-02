@@ -12,3 +12,13 @@ class TaskProfileDict(TypedDict):
     task_id: TaskId
     status: str
     custom_name: str | None
+    report: ExtractionReport | None
+    source_context: str | None
+    detail: str | None
+
+class UploadedFileProtocol(Protocol):
+    name: str
+    type: str
+
+    def getvalue(self) -> bytes:
+        ...
