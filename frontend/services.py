@@ -62,7 +62,7 @@ def send_generation_request(
 
     for _ in range(450):
         status_container.info("AI is analyzing file and compiling documentation... Please wait...")
-        task_profile = get_task_profile(task_id)
+        task_profile = get_task_profile(task_id=task_id)
 
         if not task_profile:
             status_container.empty()
@@ -95,13 +95,14 @@ def send_audit_request(
     chosen_engine: str,
     answers: dict[str, str],
     judge_iterations: int,
+    source_context: str
 ) -> None:
     """
     Sends the generated answers to an AI judge to evaluate how consistent they are
     """
 
     audit_payload = {
-        "source_context": st.session_state.source_context,
+        "source_context": source_context,
         "answers": answers,
         "iterations": judge_iterations,
     }
@@ -134,5 +135,4 @@ def send_audit_request(
     kappa_score = metadata.get("global_gwets_ac1", 0.0)
 
     st.metric("Agreement score (Gwet's AC1)", kappa_score)
-    st.dataframe(metrics.get("item_level_stability_metrics", []), width="stetch")
-    
+    st.dataframe(metrics.get("item_level_stability_metrics", []), width="stretch")

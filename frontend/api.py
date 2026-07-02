@@ -23,7 +23,7 @@ def fetch_server_templates() -> list[str]:
     """
 
     try:
-        response = requests.get(f"{BACKEND_URL}/api/templates", timeout=5)
+        response = requests.get(f"{BACKEND_URL}/api/templates", timeout=5)  
     except requests.exceptions.RequestException as error:
         logger.warning(f"Unable to fetch templates from worker program: {error}")
         return ["DMP", "README"]
@@ -40,7 +40,7 @@ def get_task_profile(*, task_id: TaskId) -> TaskProfileDict | None:
     """
 
     with contextlib.suppress(requests.exceptions.RequestException):
-        response = requests.get(f"{BACKEND_URL}/api/tasks{task_id}", timeout=5)
+        response = requests.get(f"{BACKEND_URL}/api/tasks/{task_id}", timeout=5)
         
         if response.status_code == 200:
             return response.json()

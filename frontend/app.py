@@ -40,7 +40,7 @@ def _process_pending_jobs() -> None:
     if not st.session_state.get("job_running"):
         return
     
-    if "pending_generation" not in st.session_state:
+    if "pending_generation" in st.session_state:
         generation_args: dict[str, object] = st.session_state.pop("pending_generation")
         send_generation_request(**generation_args)
         st.session_state.job_running = False
@@ -89,7 +89,7 @@ def _render_step_one_upload(
 
     custom_name: str = st.text_input(
         "Label this extraction run (optional):",
-        placeholer="Project #1",
+        placeholder="Project #1",
         disabled=disabled
     )
 
@@ -198,7 +198,7 @@ def _render_generator_tab(
     missing_question: list[str] = report.get("missing_information", [])
     extracted_answers: dict[str, str] = report.get("extracted_answers", {})
 
-    _render_step_two_manual_entry(missing_question=missing_question)
+    _render_step_two_manual_entry(missing_questions=missing_question)
     st.markdown("---")
 
     _render_step_three_download(
@@ -266,7 +266,7 @@ def _render_judge_tab(
         if not selected_task:
             return
         
-        report_data = selected_task.get("repot") or {}
+        report_data = selected_task.get("report") or {}
         extracted = report_data.get("extracted_answers", {}) if isinstance(report_data, dict) else {}
 
         st.session_state.job_running = True
@@ -274,24 +274,23 @@ def _render_judge_tab(
             "chosen_engine": chosen_engine,
             "judge_iterations": judge_iterations,
             "answers": extracted,
-            "source_context": selected_task.get("souce_context", "")
+            "source_context": selected_task.get("source_context", "")
         }
         st.rerun()
 
-        audit_metrics: dict | None = st.session_state.get("audit_metrics")
-        if not audit_metrics:
-            return
-        
+    audit_metrics: dict | None = st.session_state.get("audit_metrics")
+    if audit_metrics:
         st.markdown("---")
         st.success("Audit complete!")
 
         metadata: dict = audit_metrics.get("metadata", {})
-        kappa_score: float = float(metadata.get("global_gwet_ac1", 0.0))
+        # Safety fallback handles key variance across layers
+        kappa_score = metadata.get("global_gwet_ac1") or metadata.get("global_gwets_ac1", 0.0)
 
-        st.metric("Agreement score (Gwet's AC1)", f"{kappa_score:.3f}")
+        st.metric("Agreement score (Gwet's AC1)", f"{float(kappa_score):.3f}")
         st.dataframe(
             audit_metrics.get("item_level_stability_metrics", []),
-            width="stretch",
+            use_container_width=True,
         )
     
 def main() -> None:
@@ -315,13 +314,13 @@ def main() -> None:
         _render_generator_tab(
             is_running=is_running,
             templates=available_templates,
-            model=available_models,
+            models=available_models,
         )
     
     with tab_judge:
         _render_judge_tab(
             disabled=is_running,
-            model=available_models
+            models=available_models,
         )
 
 if __name__ == "__main__":
